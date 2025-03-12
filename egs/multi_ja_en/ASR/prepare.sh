@@ -43,24 +43,39 @@ if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
   fi
 fi
 
-log "Dataset: LibriSpeech"
+# log "Dataset: LibriSpeech"
+# if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
+#   log "Stage 1: Soft link fbank of LibriSpeech"
+#   mkdir -p data/fbank
+#   if [ -e ../../librispeech/ASR/data/fbank/.librispeech.done ]; then
+#     cd data/fbank
+#     ln -svf $(realpath ../../../../librispeech/ASR/data/fbank/librispeech_cuts*) .
+#     ln -svf $(realpath ../../../../librispeech/ASR/data/fbank/librispeech_feats*) .
+#     cd ../..
+#   else
+#     log "Abort! Please run ../../librispeech/ASR/prepare.sh --stage 1 --stop-stage 1 and ../../librispeech/ASR/prepare.sh --stage 3 --stop-stage 3"
+#     exit 1
+#   fi
+# fi
+
+log "Dataset: GigaSpeech"
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
-  log "Stage 1: Soft link fbank of LibriSpeech"
+  log "Stage 2: Soft link fbank of GigaSpeech"
   mkdir -p data/fbank
-  if [ -e ../../librispeech/ASR/data/fbank/.librispeech.done ]; then
+  if [ -e ../../gigaspeech/ASR/data/fbank/gigaspeech_cuts_XL.jsonl.gz ]; then
     cd data/fbank
-    ln -svf $(realpath ../../../../librispeech/ASR/data/fbank/librispeech_cuts*) .
-    ln -svf $(realpath ../../../../librispeech/ASR/data/fbank/librispeech_feats*) .
+    ln -svf $(realpath ../../../../gigaspeech/ASR/data/fbank/gigaspeech_cuts_XL_raw*) .
+    ln -svf $(realpath ../../../../gigaspeech/ASR/data/fbank/gigaspeech_cuts_XL*) .
     cd ../..
   else
-    log "Abort! Please run ../../librispeech/ASR/prepare.sh --stage 1 --stop-stage 1 and ../../librispeech/ASR/prepare.sh --stage 3 --stop-stage 3"
+    log "Abort! Please run ../../gigaspeech/ASR/prepare.sh --stage ?? --stop-stage ?? and ../../gigaspeech/ASR/prepare.sh --stage ?? --stop-stage ??"
     exit 1
   fi
 fi
 
 log "Dataset: ReazonSpeech"
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
-  log "Stage 2: Soft link fbank of ReazonSpeech"
+  log "Stage 3: Soft link fbank of ReazonSpeech"
   mkdir -p data/fbank
   if [ -e ../../reazonspeech/ASR/data/manifests/.reazonspeech.done ]; then
     cd data/fbank
@@ -76,8 +91,8 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   fi
 fi
 
-# New Stage 3: Prepare char based lang for ReazonSpeech
-if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
+# New Stage 4: Prepare char based lang for ReazonSpeech
+if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   lang_char_dir=data/lang_char
   log "Stage 3: Prepare char based lang for ReazonSpeech"
   mkdir -p $lang_char_dir
@@ -110,16 +125,16 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   fi
 fi
 
-if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
-  log "Stage 4: Prepare Byte BPE based lang"
+if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
+  log "Stage 5: Prepare Byte BPE based lang"
   mkdir -p data/fbank
   if [ ! -d ../../reazonspeech/ASR/data/lang_char ] && [ ! -d ./data/lang_char ]; then
     log "Abort! Please run ../../reazonspeech/ASR/prepare.sh --stage 3 --stop-stage 3"
     exit 1
   fi
 
-  if [ ! -d ../../librispeech/ASR/data/lang_bpe_500 ] && [ ! -d ./data/lang_bpe_500 ]; then
-    log "Abort! Please run ../../librispeech/ASR/prepare.sh --stage 5 --stop-stage 5"
+  if [ ! -d ../../gigaspeech/ASR/data/lang_bpe_500 ] && [ ! -d ./data/lang_bpe_500 ]; then
+    log "Abort! Please run ../../gigaspeech/ASR/prepare.sh --stage 11 --stop-stage 11"
     exit 1
   fi
 
@@ -128,7 +143,7 @@ if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   #   ln -svf $(realpath ../../../reazonspeech/ASR/data/lang_char) .
   # fi
   if [ ! -d ./lang_bpe_500 ]; then
-    ln -svf $(realpath ../../../librispeech/ASR/data/lang_bpe_500) .
+    ln -svf $(realpath ../../../gigaspeech/ASR/data/lang_bpe_500) .
   fi
   cd ../
 
