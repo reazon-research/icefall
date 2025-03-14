@@ -47,7 +47,9 @@ fi
 
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
   log "Stage 1: Decode the model."
-  for t in small, large; do
+
+  export CUDA_VISIBLE_DEVICES="0"
+  for t in small large; do
     python ./zipformer/decode.py \
         --epoch 12 \
         --avg 2 \
@@ -88,7 +90,7 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
       --encoder-dim 128,128,128,128,128,128 \
       --encoder-unmasked-dim 128,128,128,128,128,128
 
-  python ./zipformer/export_onnx_streaming.py \
+  python ./zipformer/export-onnx-streaming.py \
     --exp-dir zipformer/exp \
     --tokens data/lang_bpe_500/tokens.txt \
     --epoch 12 \
@@ -123,6 +125,7 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
     --exp-dir zipformer/exp_finetune \
     --bpe-model data/lang_bpe_500/bpe.model \
     --use-fp16 1 \
+    --use-mux 1 \
     --decoder-dim 320 \
     --joiner-dim 320 \
     --num-encoder-layers 1,1,1,1,1,1 \
@@ -139,7 +142,8 @@ fi
 
 if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   log "Stage 1: Decode the finetuned model."
-  for t in small, large; do
+  export CUDA_VISIBLE_DEVICES="0"
+  for t in small large; do
     python ./zipformer/decode.py \
         --epoch 10 \
         --avg 2 \
@@ -180,7 +184,7 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
       --encoder-dim 128,128,128,128,128,128 \
       --encoder-unmasked-dim 128,128,128,128,128,128
 
-  python ./zipformer/export_onnx_streaming.py \
+  python ./zipformer/export-onnx-streaming.py \
     --exp-dir zipformer/exp_finetune \
     --tokens data/lang_bpe_500/tokens.txt \
     --epoch 10 \

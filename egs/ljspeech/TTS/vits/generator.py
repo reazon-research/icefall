@@ -189,7 +189,7 @@ class VITSGenerator(torch.nn.Module):
         self.upsample_factor = int(np.prod(decoder_upsample_scales))
         self.spks = None
         if spks is not None and spks > 1:
-            assert global_channels > 0
+            assert global_channels > 0, global_channels
             self.spks = spks
             self.global_emb = torch.nn.Embedding(spks, global_channels)
         self.spk_embed_dim = None
@@ -409,7 +409,12 @@ class VITSGenerator(torch.nn.Module):
             g = self.global_emb(sids.view(-1)).unsqueeze(-1)
         if self.spk_embed_dim is not None:
             # (B, global_channels, 1)
-            g_ = self.spemb_proj(F.normalize(spembs.unsqueeze(0))).unsqueeze(-1)
+            if spembs.ndim == 2:
+                g_ = self.spemb_proj(F.normalize(spembs)).unsqueeze(-1)
+            elif spembs.ndim == 1:
+                g_ = self.spemb_proj(F.normalize(spembs.unsqueeze(0))).unsqueeze(-1)
+            else:
+                raise ValueError("spembs should be 1D or 2D (batch mode) tensor.")
             if g is None:
                 g = g_
             else:

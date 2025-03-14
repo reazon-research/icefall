@@ -1,12 +1,13 @@
 FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
+# python 3.10
 
 ENV LC_ALL C.UTF-8
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 # python 3.10
-ARG K2_VERSION="1.24.4.dev20240211+cuda11.8.torch2.1.0"
-ARG KALDIFEAT_VERSION="1.25.4.dev20240210+cuda11.8.torch2.1.0"
+ARG K2_VERSION="1.24.4.dev20240223+cuda11.8.torch2.1.0"
+ARG KALDIFEAT_VERSION="1.25.4.dev20240223+cuda11.8.torch2.1.0"
 ARG TORCHAUDIO_VERSION="2.1.0+cu118"
 
 LABEL authors="Fangjun Kuang <csukuangfj@gmail.com>"
@@ -40,7 +41,7 @@ RUN apt-get update && \
 
 # Install dependencies
 RUN pip install --no-cache-dir \
-      torchaudio==${TORCHAUDIO_VERSION} -f https://download.pytorch.org/whl/torch_stable.html \
+      torchaudio==${TORCHAUDIO_VERSION} -f https://download.pytorch.org/whl/torchaudio/ \
       k2==${K2_VERSION} -f https://k2-fsa.github.io/k2/cuda.html \
       git+https://github.com/lhotse-speech/lhotse \
       kaldifeat==${KALDIFEAT_VERSION} -f https://csukuangfj.github.io/kaldifeat/cuda.html \
@@ -55,6 +56,8 @@ RUN pip install --no-cache-dir \
       onnx \
       onnxruntime \
       onnxmltools \
+      onnxoptimizer \
+      onnxsim \
       multi_quantization \
       typeguard \
       numpy \

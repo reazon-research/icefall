@@ -1,6 +1,7 @@
-# Copyright      2022  Xiaomi Corp.        (authors: Daniel Povey
+# Copyright  2022-2024  Xiaomi Corp.       (authors: Daniel Povey
 #                                                    Zengwei Yao
-#                                                    Mingshuang Luo)
+#                                                    Mingshuang Luo,
+#                                                    Zengrui Jin,)
 #
 # See ../LICENSE for clarification regarding multiple authors
 #
@@ -16,9 +17,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import random
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 
 import torch
 from torch import Tensor, nn
@@ -61,11 +63,21 @@ def get_tensor_stats(
         "rms" -> square before summing, we'll take sqrt later
         "value"  -> just sum x itself
         "max", "min" -> take the maximum or minimum [over all other dims but dim] instead of summing
+        "rms-sort" -> this is a bit different than the others, it's based on computing the
+             rms over the specified dim and returning percentiles of the result (11 of them).
     Returns:
       stats: a Tensor of shape (x.shape[dim],).
       count: an integer saying how many items were counted in each element
       of stats.
     """
+
+    if stats_type == "rms-sort":
+        rms = (x**2).mean(dim=dim).sqrt()
+        rms = rms.flatten()
+        rms = rms.sort()[0]
+        rms = rms[(torch.arange(11) * rms.numel() // 10).clamp(max=rms.numel() - 1)]
+        count = 1.0
+        return rms, count
 
     count = x.numel() // x.shape[dim]
 
@@ -162,7 +174,17 @@ class TensorDiagnostic(object):
         for dim in range(ndim):
             this_dim_stats = self.stats[dim]
             if ndim > 1:
-                stats_types = ["abs", "max", "min", "positive", "value", "rms"]
+                # rms-sort is different from the others, it's based on summing over just this
+                # dim, then sorting and returning the percentiles.
+                stats_types = [
+                    "abs",
+                    "max",
+                    "min",
+                    "positive",
+                    "value",
+                    "rms",
+                    "rms-sort",
+                ]
                 if x.shape[dim] <= self.opts.max_eig_dim:
                     stats_types.append("eigs")
             else:
@@ -653,7 +675,13 @@ def attach_diagnostics(
             _model_diagnostic[f"{_name}.param_value"].accumulate(_parameter)
             _model_diagnostic[f"{_name}.param_grad"].accumulate(grad)
 
-        parameter.register_hook(param_backward_hook)
+        try:
+            parameter.register_hook(param_backward_hook)
+        except:
+            logging.warning(
+                f"Warning: could not register backward hook for parameter {name}, "
+                f"it might not be differentiable."
+            )
 
     return ans
 

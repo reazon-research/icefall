@@ -25,7 +25,7 @@ if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
     log "You need to run the prepare.sh first."
     exit -1
   fi
-  
+
   python ./zipformer/train.py \
       --world-size 4 \
       --exp-dir zipformer/exp \
@@ -48,7 +48,8 @@ fi
 
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
   log "Stage 1: Decode the model."
-  for t in small, large; do
+  export CUDA_VISIBLE_DEVICES="0"
+  for t in small large; do
     python ./zipformer/decode.py \
         --epoch 18 \
         --avg 2 \
@@ -90,7 +91,7 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
       --encoder-dim 128,128,128,128,128,128 \
       --encoder-unmasked-dim 128,128,128,128,128,128
 
-  python ./zipformer/export_onnx_streaming.py \
+  python ./zipformer/export-onnx-streaming.py \
     --exp-dir zipformer/exp \
     --tokens data/lang_partial_tone/tokens.txt \
     --epoch 18 \
@@ -104,11 +105,11 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
     --encoder-dim 128,128,128,128,128,128 \
     --encoder-unmasked-dim 128,128,128,128,128,128 \
     --causal 1
-fi 
+fi
 
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   log "Stage 2: Finetune the model"
-  
+
   # The following configuration of lr schedule should work well
   # You may also tune the following parameters to adjust learning rate schedule
   base_lr=0.0005
@@ -118,14 +119,15 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   # We recommend to start from an averaged model
   finetune_ckpt=zipformer/exp/pretrained.pt
 
-  ./zipformer/finetune.py \
+  python ./zipformer/finetune.py \
     --world-size 4 \
     --num-epochs 10 \
     --start-epoch 1 \
-    --exp-dir zipformer/exp_finetune
+    --exp-dir zipformer/exp_finetune \
     --lang-dir ./data/lang_partial_tone \
     --pinyin-type partial_with_tone \
     --use-fp16 1 \
+    --use-mux 1 \
     --decoder-dim 320 \
     --joiner-dim 320 \
     --num-encoder-layers 1,1,1,1,1,1 \
@@ -142,7 +144,8 @@ fi
 
 if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   log "Stage 1: Decode the finetuned model."
-  for t in small, large; do
+  export CUDA_VISIBLE_DEVICES="0"
+  for t in small large; do
     python ./zipformer/decode.py \
         --epoch 10 \
         --avg 2 \
@@ -184,7 +187,7 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
       --encoder-dim 128,128,128,128,128,128 \
       --encoder-unmasked-dim 128,128,128,128,128,128
 
-  python ./zipformer/export_onnx_streaming.py \
+  python ./zipformer/export-onnx-streaming.py \
     --exp-dir zipformer/exp_finetune \
     --tokens data/lang_partial_tone/tokens.txt \
     --epoch 10 \
@@ -198,4 +201,4 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
     --encoder-dim 128,128,128,128,128,128 \
     --encoder-unmasked-dim 128,128,128,128,128,128 \
     --causal 1
-fi 
+fi

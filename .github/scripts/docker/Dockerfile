@@ -31,27 +31,37 @@ LABEL github_repo="https://github.com/k2-fsa/icefall"
 
 # Install dependencies
 RUN pip install --no-cache-dir \
-      torch==${TORCH_VERSION} torchaudio==${TORCHAUDIO_VERSION} -f https://download.pytorch.org/whl/cpu/torch_stable.html \
+      torch==${TORCH_VERSION}+cpu -f https://download.pytorch.org/whl/torch \
+      torchaudio==${TORCHAUDIO_VERSION}+cpu -f https://download.pytorch.org/whl/torchaudio \
       k2==${_K2_VERSION} -f https://k2-fsa.github.io/k2/cpu.html \
       \
       git+https://github.com/lhotse-speech/lhotse \
       kaldifeat==${_KALDIFEAT_VERSION} -f https://csukuangfj.github.io/kaldifeat/cpu.html \
+      conformer==0.3.2 \
+      cython \
+      diffusers \
       dill \
+      espnet_tts_frontend \
       graphviz \
       kaldi-decoder \
       kaldi_native_io \
       kaldialign \
       kaldifst \
       kaldilm \
-      matplotlib \
+      librosa \
+      "matplotlib<=3.9.4" \
       multi_quantization \
-      numpy \
+      numba \
+      "numpy<2.0" \
+      onnxoptimizer \
+      onnxsim \
       onnx \
       onnxmltools \
       onnxruntime \
+      piper_phonemize -f https://k2-fsa.github.io/icefall/piper_phonemize.html \
+      pypinyin==0.50.0 \
       pytest \
       sentencepiece>=0.1.96 \
-      pypinyin==0.50.0 \
       six \
       tensorboard \
       typeguard
