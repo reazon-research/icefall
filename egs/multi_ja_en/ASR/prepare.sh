@@ -43,24 +43,24 @@ if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
   fi
 fi
 
-log "Dataset: LibriSpeech"
+log "Dataset: MLS-English"
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
-  log "Stage 1: Soft link fbank of LibriSpeech"
+  log "Stage 2: Soft link fbank of MLS-English"
   mkdir -p data/fbank
-  if [ -e ../../librispeech/ASR/data/fbank/.librispeech.done ]; then
+  if [ -e ../../mls_/ASR/data/fbank/.mls-english.done ]; then
     cd data/fbank
-    ln -svf $(realpath ../../../../librispeech/ASR/data/fbank/librispeech_cuts*) .
-    ln -svf $(realpath ../../../../librispeech/ASR/data/fbank/librispeech_feats*) .
+    ln -svf $(realpath ../../../../mls/ASR/data/fbank/mls-english_train_raw*) .
+    ln -svf $(realpath ../../../../mls/ASR/data/fbank/mls-english_train*) .
     cd ../..
   else
-    log "Abort! Please run ../../librispeech/ASR/prepare.sh --stage 1 --stop-stage 1 and ../../librispeech/ASR/prepare.sh --stage 3 --stop-stage 3"
+    log "Abort! Please run ../../mls/ASR/prepare.sh --stage 1 --stop-stage 1 and ../../mls/ASR/prepare.sh --stage 3 --stop-stage 3 and ?????"
     exit 1
   fi
 fi
 
 log "Dataset: ReazonSpeech"
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
-  log "Stage 2: Soft link fbank of ReazonSpeech"
+  log "Stage 3: Soft link fbank of ReazonSpeech"
   mkdir -p data/fbank
   if [ -e ../../reazonspeech/ASR/data/manifests/.reazonspeech.done ]; then
     cd data/fbank
@@ -77,9 +77,9 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
 fi
 
 # New Stage 3: Prepare char based lang for ReazonSpeech
-if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
+if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   lang_char_dir=data/lang_char
-  log "Stage 3: Prepare char based lang for ReazonSpeech"
+  log "Stage 4: Prepare char based lang for ReazonSpeech"
   mkdir -p $lang_char_dir
 
   # Prepare text
@@ -110,16 +110,16 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   fi
 fi
 
-if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
-  log "Stage 4: Prepare Byte BPE based lang"
+if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
+  log "Stage 5: Prepare Byte BPE based lang"
   mkdir -p data/fbank
   if [ ! -d ../../reazonspeech/ASR/data/lang_char ] && [ ! -d ./data/lang_char ]; then
     log "Abort! Please run ../../reazonspeech/ASR/prepare.sh --stage 3 --stop-stage 3"
     exit 1
   fi
 
-  if [ ! -d ../../librispeech/ASR/data/lang_bpe_500 ] && [ ! -d ./data/lang_bpe_500 ]; then
-    log "Abort! Please run ../../librispeech/ASR/prepare.sh --stage 5 --stop-stage 5"
+  if [ ! -d ../../mls/ASR/data/lang_bpe_500 ] && [ ! -d ./data/lang_bpe_500 ]; then
+    log "Abort! Please run ../../mls/ASR/prepare.sh --stage 8 --stop-stage 8"
     exit 1
   fi
 
@@ -128,7 +128,7 @@ if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   #   ln -svf $(realpath ../../../reazonspeech/ASR/data/lang_char) .
   # fi
   if [ ! -d ./lang_bpe_500 ]; then
-    ln -svf $(realpath ../../../librispeech/ASR/data/lang_bpe_500) .
+    ln -svf $(realpath ../../../mls/ASR/data/lang_bpe_500) .
   fi
   cd ../
 
