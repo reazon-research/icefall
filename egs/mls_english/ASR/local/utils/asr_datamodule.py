@@ -1,139 +1,150 @@
-# Copyright      2021  Piotr Żelasko
-# Copyright      2022  Xiaomi Corporation     (Author: Mingshuang Luo)
-#
-# See ../../../../LICENSE for clarification regarding multiple authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+    # Copyright      2021  Piotr Żelasko
+    # Copyright      2022  Xiaomi Corporation     (Author: Mingshuang Luo)
+    #
+    # See ../../../../LICENSE for clarification regarding multiple authors
+    #
+    # Licensed under the Apache License, Version 2.0 (the "License");
+    # you may not use this file except in compliance with the License.
+    # You may obtain a copy of the License at
+    #
+    #     http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
 
 
-import argparse
-import inspect
-import logging
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+    import argparse
+    import inspect
+    import logging
+    from functools import lru_cache
+    from pathlib import Path
+    from typing import Any, Dict, List, Optional, Union
 
-from lhotse import CutSet, Fbank, FbankConfig
-from lhotse.dataset import (
-    CutConcatenate,
-    DynamicBucketingSampler,
-    K2SpeechRecognitionDataset,
-    SimpleCutSampler,
-    SpecAugment,
-)
-from lhotse.dataset.input_strategies import OnTheFlyFeatures
-from torch.utils.data import DataLoader
+    from lhotse import CutSet, Fbank, FbankConfig
+    from lhotse.dataset import (
+        CutConcatenate,
+        DynamicBucketingSampler,
+        K2SpeechRecognitionDataset,
+        SimpleCutSampler,
+        SpecAugment,
+    )
+    from lhotse.dataset.input_strategies import OnTheFlyFeatures
+    from torch.utils.data import DataLoader
 
-from icefall.utils import str2bool
+    from icefall.utils import str2bool
 
 
-class MLSEnglishHFAsrDataModule:
-    """
-    DataModule for MLS English ASR experiments using HuggingFace dataset.
-    Handles dataset loading and provides train/valid/test dataloaders with
-    on-the-fly feature extraction.
-    """
+    class MLSEnglishHFAsrDataModule:
+        """
+        DataModule for MLS English ASR experiments using HuggingFace dataset.
+        Handles dataset loading and provides train/valid/test dataloaders with
+        on-the-fly feature extraction.
+        """
 
-    def __init__(self, args: argparse.Namespace):
-        self.args = args
-        self.dataset = None
+        def __init__(self, args: argparse.Namespace):
+            self.args = args
+            self.dataset = None
 
-    #     self._validate_args()
+        #     self._validate_args()
 
-    # def _validate_args(self) -> None:
-    #     """Validate configuration arguments."""
-    #     if self.args.on_the_fly_feats is False:
-    #         raise ValueError("This recipe requires on-the-fly feature extraction")
+        # def _validate_args(self) -> None:
+        #     """Validate configuration arguments."""
+        #     if self.args.on_the_fly_feats is False:
+        #         raise ValueError("This recipe requires on-the-fly feature extraction")
 
-    @classmethod
-    def add_arguments(cls, parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-        group = parser.add_argument_group(
-            title="ASR data related options",
-            description="Options for data loading and processing",
-        )
+        @classmethod
+        def add_arguments(cls, parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+            group = parser.add_argument_group(
+                title="ASR data related options",
+                description="Options for data loading and processing",
+            )
 
-        # Dataset configuration
-        group.add_argument(
-            "--dataset-path",
-            type=str,
-            default="parler-tts/mls_eng",
-            help="Path to HuggingFace MLS English dataset (name or local path)",
-        )
+            # Dataset configuration
+            group.add_argument(
+                "--dataset-path",
+                type=str,
+                default="parler-tts/mls_eng",
+                help="Path to HuggingFace MLS English dataset (name or local path)",
+            )
 
-        # Sampling and batching
-        group.add_argument(
-            "--max-duration",
-            type=float,
-            default=200.0,
-            help="Maximum batch duration in seconds",
-        )
-        group.add_argument(
-            "--bucketing-sampler",
-            type=str2bool,
-            default=True,
-            help="Whether to use bucketing sampler",
-        )
-        group.add_argument(
-            "--num-buckets",
-            type=int,
-            default=30,
-            help="Number of buckets for DynamicBucketingSampler",
-        )
+            # Sampling and batching
+            group.add_argument(
+                "--max-duration",
+                type=float,
+                default=200.0,
+                help="Maximum batch duration in seconds",
+            )
+            group.add_argument(
+                "--bucketing-sampler",
+                type=str2bool,
+                default=True,
+                help="Whether to use bucketing sampler",
+            )
+            group.add_argument(
+                "--num-buckets",
+                type=int,
+                default=30,
+                help="Number of buckets for DynamicBucketingSampler",
+            )
 
-        # Data augmentation
-        group.add_argument(
-            "--enable-spec-aug",
-            type=str2bool,
-            default=True,
-            help="Whether to enable SpecAugment",
-        )
-        group.add_argument(
-            "--spec-aug-time-warp-factor",
-            type=int,
-            default=80,
-            help="Time warp factor for SpecAugment",
-        )
+            # Data augmentation
+            group.add_argument(
+                "--enable-spec-aug",
+                type=str2bool,
+                default=True,
+                help="Whether to enable SpecAugment",
+            )
+            group.add_argument(
+                "--spec-aug-time-warp-factor",
+                type=int,
+                default=80,
+                help="Time warp factor for SpecAugment",
+            )
 
-        # Dataloader configuration
-        group.add_argument(
-            "--num-workers",
-            type=int,
-            default=2,
-            help="Number of workers for data loading",
-        )
-        group.add_argument(
-            "--return-cuts",
-            type=str2bool,
-            default=False,
-            help="Whether to return cuts in batch",
-        )
+            # Dataloader configuration
+            group.add_argument(
+                "--num-workers",
+                type=int,
+                default=2,
+                help="Number of workers for data loading",
+            )
+            group.add_argument(
+                "--return-cuts",
+                type=str2bool,
+                default=False,
+                help="Whether to return cuts in batch",
+            )
 
-        group.add_argument(
-            "--drop-last",
-            type=str2bool,
-            default=True,
-            help="Whether to drop last incomplete batch",
-        )
+            group.add_argument(
+                "--drop-last",
+                type=str2bool,
+                default=True,
+                help="Whether to drop last incomplete batch",
+            )
 
-        return parser
+            return parser
 
-    def load_dataset(self, dataset_path: Optional[str] = None) -> None:
-        """Load the HuggingFace dataset."""
-        dataset_path = dataset_path or self.args.dataset_path
-        logging.info(f"Loading MLS English dataset from: {dataset_path}")
+        def load_dataset(self, dataset_path: Optional[str] = None) -> None:
+            """Load the HuggingFace dataset."""
+            dataset_path = dataset_path or self.args.dataset_path
+            logging.info(f"Loading MLS English dataset from: {dataset_path}")
 
-        try:
-            from datasets import load_dataset
+        def train_dataloaders(
+            self, 
+            cuts_train: CutSet, 
+            sampler_state_dict: Optional[Dict[str, Any]] = None,
+            cuts_musan: Optional[CutSet] = None,
+        ) -> DataLoader:
+            """
+            Args:
+              cuts_train:
+                CutSet for training.
+              sampler_state_dict:
+                The state dict for the training sampler.
+            """
 
             self.dataset = load_dataset(dataset_path)
             logging.info("Dataset loaded successfully")
@@ -147,6 +158,13 @@ class MLSEnglishHFAsrDataModule:
     ) -> K2SpeechRecognitionDataset:
         """Create appropriate dataset with transforms."""
         transforms = []
+        if cuts_musan is not None:
+            logging.info("Enable MUSAN")
+            transforms.append(
+                    CutMix(cuts=cuts_musan, p=0.5, snr=(10,20), preserve_id=True)
+            )
+        else:
+            logging.info("Disable MUSAN")
         input_transforms = []
 
         if is_train and self.args.enable_spec_aug:
