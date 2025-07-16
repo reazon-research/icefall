@@ -1228,12 +1228,25 @@ def run(rank, world_size, args):
         sampler_state_dict = checkpoints["sampler"]
     else:
         sampler_state_dict = None
+    
+    if args.enable_musan:
+        musan_path = Path(args.manifest_dir) / "musan_cuts.jsonl.gz"
+        if musan_path.exists():
+            cuts_musan = load_manifest(musan_path)
+            logging.info(f"Loaded MUSAN manifest from {musan_path}")
+        else:
+            logging.warning(f"MUSAN manifest not found at {musan_path}, disabling MUSAN augmentation")
+            cuts_musan = None
+    else:
+        cuts_musan = None
 
+    
     # train_dl = mls_english_corpus.train_dataloaders(
     #     train_cuts, sampler_state_dict=sampler_state_dict
     # )
     train_dl = mls_english_corpus.train_dataloader(
-        sampler_state_dict=sampler_state_dict
+        sampler_state_dict=sampler_state_dict,
+        cuts_musan=cuts_musan,
     )
 
     # valid_cuts = mls_english_corpus.valid_cuts()
