@@ -69,6 +69,7 @@ import argparse
 import copy
 import logging
 import warnings
+from functools import partial
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -215,7 +216,7 @@ def load_model_params(
 
     """
     logging.info(f"Loading checkpoint from {ckpt}")
-    checkpoint = torch.load(ckpt, map_location="cpu")
+    checkpoint = torch.load(ckpt, map_location="cpu", weights_only=False)
 
     # if module list is empty, load the whole model from ckpt
     if not init_modules:
