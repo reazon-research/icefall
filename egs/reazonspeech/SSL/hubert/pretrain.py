@@ -774,16 +774,7 @@ def train_one_epoch(
                     )
 
             if wandb_run is not None:
-                wandb_log = {
-                    "train/loss": loss_info["loss"],
-                    "train/loss_m_0": loss_info["loss_m_0"],
-                    "train/loss_u_0": loss_info["loss_u_0"],
-                    "train/loss_features_pen": loss_info["loss_features_pen"],
-                    "train/correct_m_0": loss_info["correct_m_0"],
-                    "train/count_m_0": loss_info["count_m_0"],
-                    "train/correct_u_0": loss_info["correct_u_0"],
-                    "train/count_u_0": loss_info["count_u_0"],
-                }
+                wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
                 if params.use_fp16:
                     wandb_log["train/grad_scale"] = cur_grad_scale
                 wandb_run.log(wandb_log, step=batch_idx)
@@ -806,16 +797,7 @@ def train_one_epoch(
                     tb_writer, "train/valid_", params.batch_idx_train
                 )
             if wandb_run is not None:
-                wandb_log = {
-                    "valid/loss": valid_info["loss"],
-                    "valid/loss_m_0": valid_info["loss_m_0"],
-                    "valid/loss_u_0": valid_info["loss_u_0"],
-                    "valid/loss_features_pen": valid_info["loss_features_pen"],
-                    "valid/correct_m_0": valid_info["correct_m_0"],
-                    "valid/count_m_0": valid_info["count_m_0"],
-                    "valid/correct_u_0": valid_info["correct_u_0"],
-                    "valid/count_u_0": valid_info["count_u_0"],
-                }
+                wandb_log = {f"valid/{k}": v for k, v in valid_info.norm_items()}
                 wandb_run.log(wandb_log, step=batch_idx)
 
     if sub_batch_idx % params.accum_grad != params.accum_grad - 1:
