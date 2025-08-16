@@ -5,32 +5,15 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 
 set -eou pipefail
 
-nj=32
-# run step 0 to step 4 by default
 stage=0
-stop_stage=4
+stop_stage=3
 
-# We assume dl_dir (download dir) contains the following
-# directories and files. If not, they will be downloaded
-# by this script automatically.
-#
-#  - $dl_dir/LibriLight
-#     - small
-#     - medium
-#     - large
-#  
-#     You can download them from
-#      - https://dl.fbaipublicfiles.com/librilight/data/small.tar
-#      - https://dl.fbaipublicfiles.com/librilight/data/medium.tar
-#      - https://dl.fbaipublicfiles.com/librilight/data/large.tar
-
-# dl_dir=$PWD/download
 dl_dir=/raid/home/yubo1336/datasets
 local_dir=/raid/home/yubo1336/datasets/reazonspeech
 data_dir=/raid/home/yubo1336/datasets/icefall/data
 split=medium
 ngpus=8
-nproc_per_gpu=2
+nproc_per_gpu=4
 
 . shared/parse_options.sh || exit 1
 
@@ -61,9 +44,8 @@ fi
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
   log "Stage 2: Preprocess ReazonSpeech manifest"
   mkdir -p $data_dir/kmeans
-  if [ ! -f $data_dir/kmeans/.preprocess_complete ]; then
-    python local/preprocess_preprocess.py --src-dir $data_dir/manifests --output-dir $data_dir/kmeans --part $split
-    touch $data_dir/kmeans/.preprocess_complete
+  if [ ! -f $data_dir/kmeans/$split/reazonspeech_cuts_train_raw.jsonl.gz ]; then
+    python local/preprocess_reazonspeech.py --src-dir $data_dir/manifests --output-dir $data_dir/kmeans --part $split
   fi
 fi
 
