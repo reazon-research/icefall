@@ -777,7 +777,7 @@ def train_one_epoch(
                 wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
                 if params.use_fp16:
                     wandb_log["train/grad_scale"] = cur_grad_scale
-                wandb_run.log(wandb_log, step=batch_idx)
+                wandb_run.log(wandb_log, step=params.batch_idx_train)
 
         if batch_idx % params.valid_interval == 0 and not params.print_diagnostics:
             logging.info("Computing validation loss")
@@ -798,7 +798,7 @@ def train_one_epoch(
                 )
             if wandb_run is not None:
                 wandb_log = {f"valid/{k}": v for k, v in valid_info.norm_items()}
-                wandb_run.log(wandb_log, step=batch_idx)
+                wandb_run.log(wandb_log, step=params.batch_idx_train)
 
     if sub_batch_idx % params.accum_grad != params.accum_grad - 1:
         optimizer.zero_grad()
