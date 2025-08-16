@@ -50,6 +50,7 @@ import optim
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
+import wandb
 from hubert_ce import HubertModel, add_hubert_arguments
 from lhotse.cut import Cut
 from lhotse.dataset.sampling.base import CutSampler
@@ -130,6 +131,20 @@ def get_parser():
         type=str2bool,
         default=True,
         help="Should various information be logged in tensorboard.",
+    )
+
+    parser.add_argument(
+        "--wandb",
+        type=str2bool,
+        default=True,
+        help="Should wandb be used.",
+    )
+
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="k2SSL-Hubert",
+        help="Wandb project name.",
     )
 
     parser.add_argument(
@@ -360,9 +375,9 @@ def get_params() -> AttributeDict:
             "best_valid_epoch": -1,
             "batch_idx_train": 0,
             "sub_batch_idx_train": 0,
-            "log_interval": 50,
+            "log_interval": 100,
             "reset_interval": 200,
-            "valid_interval": 3000,  # For the 100h subset, use 800
+            "valid_interval": 5000,
             "env_info": get_env_info(),
         }
     )
@@ -580,6 +595,7 @@ def train_one_epoch(
     scaler: GradScaler,
     model_avg: Optional[nn.Module] = None,
     tb_writer: Optional[SummaryWriter] = None,
+    wandb_run: Optional[wandb.Run] = None,
     world_size: int = 1,
     rank: int = 0,
 ) -> None:
@@ -608,6 +624,8 @@ def train_one_epoch(
         The stored model averaged from the start of training.
       tb_writer:
         Writer to write log messages to tensorboard.
+      wandb_run:
+        Wandb run object.
       world_size:
         Number of nodes in DDP training. If it is 1, DDP is disabled.
       rank:
@@ -755,6 +773,12 @@ def train_one_epoch(
                         params.batch_idx_train,
                     )
 
+            if wandb_run is not None:
+                wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
+                if params.use_fp16:
+                    wandb_log["train/grad_scale"] = cur_grad_scale
+                wandb_run.log(wandb_log, step=batch_idx)
+
         if batch_idx % params.valid_interval == 0 and not params.print_diagnostics:
             logging.info("Computing validation loss")
             valid_info = compute_validation_loss(
@@ -768,10 +792,14 @@ def train_one_epoch(
             logging.info(
                 f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated() // 1000000}MB"
             )
+
             if tb_writer is not None:
                 valid_info.write_summary(
                     tb_writer, "train/valid_", params.batch_idx_train
                 )
+            if wandb_run is not None:
+                wandb_log = {f"valid/{k}": v for k, v in valid_info.norm_items()}
+                wandb_run.log(wandb_log, step=batch_idx)
 
     if sub_batch_idx % params.accum_grad != params.accum_grad - 1:
         optimizer.zero_grad()
@@ -808,6 +836,15 @@ def run(rank, world_size, args):
         tb_writer = SummaryWriter(log_dir=f"{params.exp_dir}/tensorboard")
     else:
         tb_writer = None
+
+    if args.wandb and rank == 0:
+        wandb_run = wandb.init(
+            project=params.wandb_project,
+            name=params.exp_dir.name,
+            config=params,
+        )
+    else:
+        wandb_run = None
 
     device = torch.device("cpu")
     if torch.cuda.is_available():
@@ -889,9 +926,10 @@ def run(rank, world_size, args):
             c.duration < params.min_keep_size / params.sample_rate
             or c.duration > params.max_keep_size / params.sample_rate
         ):
-            logging.warning(
-                f"Exclude cut with ID {c.id} from training. Duration: {c.duration}"
-            )
+            # Too many warnings
+            # logging.warning(
+            #     f"Exclude cut with ID {c.id} from training. Duration: {c.duration}"
+            # )
             return False
 
         return True
@@ -964,6 +1002,7 @@ def run(rank, world_size, args):
             valid_dl=valid_dl,
             scaler=scaler,
             tb_writer=tb_writer,
+            wandb_run=wandb_run,
             world_size=world_size,
             rank=rank,
         )
@@ -1073,4 +1112,9 @@ torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        wandb_run = wandb.run
+        if wandb_run is not None:
+            wandb_run.finish()
