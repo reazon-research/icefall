@@ -170,6 +170,7 @@ class ReazonSpeechAsrDataModule:
             num_workers=self.args.num_workers,
             persistent_workers=False,
             worker_init_fn=worker_init_fn,
+            pin_memory=True,
         )
 
         return train_dl

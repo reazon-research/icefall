@@ -55,6 +55,7 @@ import sentencepiece as spm
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
+import wandb
 from asr_datamodule import ReazonSpeechAsrDataModule
 from decoder import Decoder
 from hubert import HubertModel, add_hubert_arguments
@@ -768,6 +769,7 @@ def train_one_epoch(
     scaler: GradScaler,
     model_avg: Optional[nn.Module] = None,
     tb_writer: Optional[SummaryWriter] = None,
+    wandb_run: Optional[wandb.Run] = None,
     world_size: int = 1,
     rank: int = 0,
 ) -> None:
@@ -796,6 +798,8 @@ def train_one_epoch(
         The stored model averaged from the start of training.
       tb_writer:
         Writer to write log messages to tensorboard.
+      wandb_run:
+        Wandb run object.
       world_size:
         Number of nodes in DDP training. If it is 1, DDP is disabled.
       rank:
@@ -944,6 +948,12 @@ def train_one_epoch(
                         params.batch_idx_train,
                     )
 
+            if wandb_run is not None:
+                wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
+                if params.use_fp16:
+                    wandb_log["train/grad_scale"] = cur_grad_scale
+                wandb_run.log(wandb_log, step=params.batch_idx_train)
+
         if batch_idx % params.valid_interval == 0 and not params.print_diagnostics:
             logging.info("Computing validation loss")
             valid_info = compute_validation_loss(
@@ -962,6 +972,9 @@ def train_one_epoch(
                 valid_info.write_summary(
                     tb_writer, "train/valid_", params.batch_idx_train
                 )
+            if wandb_run is not None:
+                wandb_log = {f"valid/{k}": v for k, v in valid_info.norm_items()}
+                wandb_run.log(wandb_log, step=params.batch_idx_train)
 
     if sub_batch_idx % params.accum_grad != params.accum_grad - 1:
         optimizer.zero_grad()
@@ -998,6 +1011,15 @@ def run(rank, world_size, args):
         tb_writer = SummaryWriter(log_dir=f"{params.exp_dir}/tensorboard")
     else:
         tb_writer = None
+
+    if args.wandb and rank == 0:
+        wandb_run = wandb.init(
+            project=params.wandb_project,
+            name=params.exp_dir.name,
+            config=params,
+        )
+    else:
+        wandb_run = None
 
     device = torch.device("cpu")
     if torch.cuda.is_available():
@@ -1133,6 +1155,8 @@ def run(rank, world_size, args):
 
         if tb_writer is not None:
             tb_writer.add_scalar("train/epoch", epoch, params.batch_idx_train)
+        if wandb_run is not None:
+            wandb_run.log({"train/epoch": epoch}, step=params.batch_idx_train)
 
         params.cur_epoch = epoch
 
@@ -1147,6 +1171,7 @@ def run(rank, world_size, args):
             valid_dl=valid_dl,
             scaler=scaler,
             tb_writer=tb_writer,
+            wandb_run=wandb_run,
             world_size=world_size,
             rank=rank,
         )
