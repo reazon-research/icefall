@@ -57,7 +57,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 from asr_datamodule import ReazonSpeechAsrDataModule
 from decoder import Decoder
-from hubert import HubertModel, add_hubert_arguments
+from hubert_ce import HubertModel, add_hubert_arguments
 from joiner import Joiner
 from tokenizer import Tokenizer
 from lhotse.cut import Cut
