@@ -37,7 +37,6 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
   --accum-grad 4
 """
 
-
 import argparse
 import copy
 import logging
@@ -50,12 +49,13 @@ import optim
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
+import wandb
 from hubert_ce import HubertModel
 from lhotse.cut import Cut
 from lhotse.dataset.sampling.base import CutSampler
 from lhotse.utils import fix_random_seed
 from optim import Eden, ScaledAdam
-from ssl_datamodule import LibriLightDataModule
+from ssl_datamodule import ReazonSpeechDataModule
 from torch import Tensor
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -426,6 +426,20 @@ def get_parser():
     )
 
     parser.add_argument(
+        "--wandb",
+        type=str2bool,
+        default=True,
+        help="Should wandb be used.",
+    )
+
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="k2SSL-Zipformer",
+        help="Wandb project name.",
+    )
+
+    parser.add_argument(
         "--tensorboard",
         type=str2bool,
         default=True,
@@ -707,7 +721,7 @@ def load_checkpoint_if_available(
     if params.start_batch > 0:
         filename = params.exp_dir / f"checkpoint-{params.start_batch}.pt"
     elif params.start_epoch > 1:
-        filename = params.exp_dir / f"epoch-{params.start_epoch-1}.pt"
+        filename = params.exp_dir / f"epoch-{params.start_epoch - 1}.pt"
     else:
         return None
 
@@ -873,6 +887,7 @@ def train_one_epoch(
     scaler: GradScaler,
     model_avg: Optional[nn.Module] = None,
     tb_writer: Optional[SummaryWriter] = None,
+    wandb_run: Optional[wandb.Run] = None,
     world_size: int = 1,
     rank: int = 0,
 ) -> None:
@@ -901,6 +916,8 @@ def train_one_epoch(
         The stored model averaged from the start of training.
       tb_writer:
         Writer to write log messages to tensorboard.
+      wandb_run:
+        Wandb run object.
       world_size:
         Number of nodes in DDP training. If it is 1, DDP is disabled.
       rank:
@@ -1046,6 +1063,12 @@ def train_one_epoch(
                         "train/grad_scale", cur_grad_scale, params.batch_idx_train
                     )
 
+            if wandb_run is not None:
+                wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
+                if params.use_fp16:
+                    wandb_log["train/grad_scale"] = cur_grad_scale
+                wandb_run.log(wandb_log, step=params.batch_idx_train)
+
         if batch_idx % params.valid_interval == 0 and not params.print_diagnostics:
             logging.info("Computing validation loss")
             valid_info = compute_validation_loss(
@@ -1057,12 +1080,15 @@ def train_one_epoch(
             model.train()
             logging.info(f"Epoch {params.cur_epoch}, validation: {valid_info}")
             logging.info(
-                f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated()//1000000}MB"
+                f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated() // 1000000}MB"
             )
             if tb_writer is not None:
                 valid_info.write_summary(
                     tb_writer, "train/valid_", params.batch_idx_train
                 )
+            if wandb_run is not None:
+                wandb_log = {f"valid/{k}": v for k, v in valid_info.norm_items()}
+                wandb_run.log(wandb_log, step=params.batch_idx_train)
 
     if batch_idx % params.accum_grad != params.accum_grad - 1:
         optimizer.zero_grad()
@@ -1099,6 +1125,15 @@ def run(rank, world_size, args):
         tb_writer = SummaryWriter(log_dir=f"{params.exp_dir}/tensorboard")
     else:
         tb_writer = None
+
+    if args.wandb and rank == 0:
+        wandb_run = wandb.init(
+            project=params.wandb_project,
+            name=params.exp_dir.name,
+            config=params,
+        )
+    else:
+        wandb_run = None
 
     device = torch.device("cpu")
     if torch.cuda.is_available():
@@ -1163,9 +1198,9 @@ def run(rank, world_size, args):
     if params.inf_check:
         register_inf_check_hooks(model)
 
-    librilight = LibriLightDataModule(args)
+    reazonspeech = ReazonSpeechDataModule(args)
 
-    train_cuts = librilight.train_all_shuf_cuts()
+    train_cuts = reazonspeech.train_cuts()
 
     def remove_short_and_long_utt(c: Cut):
         # Keep only utterances with duration between 1 second and 20 seconds
@@ -1196,7 +1231,7 @@ def run(rank, world_size, args):
     else:
         sampler_state_dict = None
 
-    train_dl = librilight.train_dataloaders(
+    train_dl = reazonspeech.train_dataloaders(
         train_cuts,
         sample_rate=params.sample_rate,
         label_rate=params.label_rate,
@@ -1207,11 +1242,10 @@ def run(rank, world_size, args):
         sampler_state_dict=sampler_state_dict,
     )
 
-    valid_cuts = librilight.dev_clean_cuts()
-    # valid_cuts += librilight.dev_other_cuts()
+    valid_cuts = reazonspeech.dev_cuts()
     valid_cuts = valid_cuts.filter(remove_short_and_long_utt)
 
-    valid_dl = librilight.valid_dataloaders(
+    valid_dl = reazonspeech.valid_dataloaders(
         valid_cuts,
         sample_rate=params.sample_rate,
         label_rate=params.label_rate,
@@ -1254,6 +1288,7 @@ def run(rank, world_size, args):
             valid_dl=valid_dl,
             scaler=scaler,
             tb_writer=tb_writer,
+            wandb_run=wandb_run,
             world_size=world_size,
             rank=rank,
         )
@@ -1341,13 +1376,13 @@ def scan_pessimistic_batches_for_oom(
             display_and_save_batch(batch, params=params)
             raise
         logging.info(
-            f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated()//1000000}MB"
+            f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated() // 1000000}MB"
         )
 
 
 def main():
     parser = get_parser()
-    LibriLightDataModule.add_arguments(parser)
+    ReazonSpeechDataModule.add_arguments(parser)
     args = parser.parse_args()
     args.exp_dir = Path(args.exp_dir)
 

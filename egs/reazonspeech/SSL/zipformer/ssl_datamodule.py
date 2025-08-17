@@ -42,12 +42,9 @@ class _SeedWorkers:
         fix_random_seed(self.seed + worker_id)
 
 
-class LibriLightDataModule:
+class ReazonSpeechDataModule:
     """
     DataModule for SSL experiments.
-    It assumes there is always one train and valid dataloader,
-    but there can be multiple test dataloaders (e.g. LibriSpeech test-clean
-    and test-other).
 
     It contains all the common data pipeline modules used in SSL
     experiments, e.g.:
@@ -113,8 +110,7 @@ class LibriLightDataModule:
             "--num-workers",
             type=int,
             default=2,
-            help="The number of training dataloader workers that "
-            "collect the batches.",
+            help="The number of training dataloader workers that collect the batches.",
         )
         group.add_argument(
             "--do-normalize",
@@ -264,71 +260,22 @@ class LibriLightDataModule:
         return test_dl
 
     @lru_cache()
-    def small_cuts(self) -> CutSet:
-        logging.info("About to get small cuts")
+    def train_cuts(self) -> CutSet:
+        logging.info("About to get train cuts")
         return load_manifest_lazy(
-            self.args.manifest_dir / "librilight_cuts_small.jsonl.gz"
+            self.args.manifest_dir / "reazonspeech_cuts_train.jsonl.gz"
         )
 
     @lru_cache()
-    def medium_cuts(self) -> CutSet:
-        logging.info("About to get medium cuts")
-        filenames = glob.glob(
-            f"{self.args.manifest_dir}/medium_splits/librilight_cuts_medium.*.jsonl.gz"
-        )
-        pattern = re.compile(r"librilight_cuts_medium.([0-9]+).jsonl.gz")
-        idx_filenames = ((int(pattern.search(f).group(1)), f) for f in filenames)
-        idx_filenames = sorted(idx_filenames, key=lambda x: x[0])
-        sorted_filenames = [f[1] for f in idx_filenames]
-        logging.info(
-            f"Loading LibriLight medium {len(sorted_filenames)} splits in lazy mode"
-        )
-
-        return combine(load_manifest_lazy(p) for p in sorted_filenames)
-
-    @lru_cache()
-    def large_cuts(self) -> CutSet:
-        logging.info("About to get large cuts")
-        filenames = glob.glob(
-            f"{self.args.manifest_dir}/large_splits/librilight_cuts_large.*.jsonl.gz"
-        )
-        pattern = re.compile(r"librilight_cuts_large.([0-9]+).jsonl.gz")
-        idx_filenames = ((int(pattern.search(f).group(1)), f) for f in filenames)
-        idx_filenames = sorted(idx_filenames, key=lambda x: x[0])
-        sorted_filenames = [f[1] for f in idx_filenames]
-        logging.info(
-            f"Loading LibriLight large {len(sorted_filenames)} splits in lazy mode"
-        )
-
-        return combine(load_manifest_lazy(p) for p in sorted_filenames)
-
-    @lru_cache()
-    def train_all_shuf_cuts(self) -> CutSet:
-        logging.info("About to get the shuffled small, medium and large cuts")
-        small_cuts = self.small_cuts()
-        medium_cuts = self.medium_cuts()
-        large_cuts = self.large_cuts()
-        return CutSet.mux(
-            small_cuts,
-            medium_cuts,
-            large_cuts,
-            weights=[
-                122867,  # len(small_cuts)
-                1104071,  # len(medium_cuts)
-                11012085,  # len(large_cuts)
-            ],
-        )
-
-    @lru_cache()
-    def dev_clean_cuts(self) -> CutSet:
-        logging.info("About to get dev-clean cuts")
+    def dev_cuts(self) -> CutSet:
+        logging.info("About to get dev cuts")
         return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_dev-clean.jsonl.gz"
+            self.args.manifest_dir / "reazonspeech_cuts_dev.jsonl.gz"
         )
 
     @lru_cache()
-    def dev_other_cuts(self) -> CutSet:
-        logging.info("About to get dev-other cuts")
+    def test_cuts(self) -> CutSet:
+        logging.info("About to get test cuts")
         return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_dev-other.jsonl.gz"
+            self.args.manifest_dir / "reazonspeech_cuts_test.jsonl.gz"
         )
