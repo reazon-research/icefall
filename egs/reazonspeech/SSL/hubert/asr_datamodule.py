@@ -40,7 +40,7 @@ class _SeedWorkers:
         fix_random_seed(self.seed + worker_id)
 
 
-class LibriSpeechAsrDataModule:
+class ReazonSpeechAsrDataModule:
     """
     DataModule for ASR experiments.
     It assumes there is always one train and valid dataloader,
@@ -65,12 +65,6 @@ class LibriSpeechAsrDataModule:
             description="These options are used for the preparation of "
             "PyTorch DataLoaders from Lhotse CutSet's -- they control the "
             "effective batch sizes, sampling strategies.",
-        )
-        group.add_argument(
-            "--full-libri",
-            type=str2bool,
-            default=True,
-            help="When enabled use 960h LibriSpeech. " "Otherwise, use 100h subset.",
         )
 
         group.add_argument(
@@ -117,8 +111,7 @@ class LibriSpeechAsrDataModule:
             "--num-workers",
             type=int,
             default=2,
-            help="The number of training dataloader workers that "
-            "collect the batches.",
+            help="The number of training dataloader workers that collect the batches.",
         )
         group.add_argument(
             "--do-normalize",
@@ -218,70 +211,22 @@ class LibriSpeechAsrDataModule:
         return test_dl
 
     @lru_cache()
-    def train_clean_100_cuts(self) -> CutSet:
-        logging.info("About to get train-clean-100 cuts")
+    def train_cuts(self) -> CutSet:
+        logging.info("About to get train cuts")
         return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_train-clean-100.jsonl.gz"
+            self.args.manifest_dir / "reazonspeech_cuts_train.jsonl.gz"
         )
 
     @lru_cache()
-    def train_clean_360_cuts(self) -> CutSet:
-        logging.info("About to get train-clean-360 cuts")
+    def dev_cuts(self) -> CutSet:
+        logging.info("About to get dev cuts")
         return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_train-clean-360.jsonl.gz"
+            self.args.manifest_dir / "reazonspeech_cuts_dev.jsonl.gz"
         )
 
     @lru_cache()
-    def train_other_500_cuts(self) -> CutSet:
-        logging.info("About to get train-other-500 cuts")
+    def test_cuts(self) -> CutSet:
+        logging.info("About to get test cuts")
         return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_train-other-500.jsonl.gz"
-        )
-
-    @lru_cache()
-    def train_all_shuf_cuts(self) -> CutSet:
-        logging.info(
-            "About to get the shuffled train-clean-100, \
-            train-clean-360 and train-other-500 cuts"
-        )
-        train_clean_100_cuts = self.train_clean_100_cuts()
-        train_clean_360_cuts = self.train_clean_360_cuts()
-        train_other_500_cuts = self.train_other_500_cuts()
-        return CutSet.mux(
-            train_clean_100_cuts,
-            train_clean_360_cuts,
-            train_other_500_cuts,
-            weights=[
-                28539,  # len(train_clean_100_cuts)
-                104014,  # len(train_clean_360_cuts)
-                148688,  # len(train_other_500_cuts)
-            ],
-        )
-
-    @lru_cache()
-    def dev_clean_cuts(self) -> CutSet:
-        logging.info("About to get dev-clean cuts")
-        return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_dev-clean.jsonl.gz"
-        )
-
-    @lru_cache()
-    def dev_other_cuts(self) -> CutSet:
-        logging.info("About to get dev-other cuts")
-        return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_dev-other.jsonl.gz"
-        )
-
-    @lru_cache()
-    def test_clean_cuts(self) -> CutSet:
-        logging.info("About to get test-clean cuts")
-        return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_test-clean.jsonl.gz"
-        )
-
-    @lru_cache()
-    def test_other_cuts(self) -> CutSet:
-        logging.info("About to get test-other cuts")
-        return load_manifest_lazy(
-            self.args.manifest_dir / "librispeech_cuts_test-other.jsonl.gz"
+            self.args.manifest_dir / "reazonspeech_cuts_test.jsonl.gz"
         )
