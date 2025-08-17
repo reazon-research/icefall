@@ -953,7 +953,7 @@ def train_one_epoch(
         batch_size = batch["kmeans"].shape[0]
 
         try:
-            with torch.cuda.amp.autocast(enabled=params.use_fp16):
+            with torch.amp.autocast("cuda", enabled=params.use_fp16):
                 loss, loss_info = compute_loss(
                     params=params,
                     model=model,
@@ -1355,7 +1355,7 @@ def scan_pessimistic_batches_for_oom(
     for criterion, cuts in batches.items():
         batch = train_dl.dataset[cuts]
         try:
-            with torch.cuda.amp.autocast(enabled=params.use_fp16):
+            with torch.amp.autocast("cuda", enabled=params.use_fp16):
                 loss, _ = compute_loss(
                     params=params,
                     model=model,
