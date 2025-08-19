@@ -1067,6 +1067,8 @@ def train_one_epoch(
                 wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
                 if params.use_fp16:
                     wandb_log["train/grad_scale"] = cur_grad_scale
+                wandb_log["train/lr"] = cur_lr
+                wandb_log["train/batch_size"] = batch_size
                 wandb_run.log(wandb_log, step=params.batch_idx_train)
 
         if batch_idx % params.valid_interval == 0 and not params.print_diagnostics:

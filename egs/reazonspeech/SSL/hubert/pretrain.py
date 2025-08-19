@@ -777,6 +777,8 @@ def train_one_epoch(
                 wandb_log = {f"train/{k}": v for k, v in loss_info.norm_items()}
                 if params.use_fp16:
                     wandb_log["train/grad_scale"] = cur_grad_scale
+                wandb_log["train/lr"] = cur_lr
+                wandb_log["train/batch_size"] = batch_size
                 wandb_run.log(wandb_log, step=params.batch_idx_train)
 
         if batch_idx % params.valid_interval == 0 and not params.print_diagnostics:
@@ -988,6 +990,8 @@ def run(rank, world_size, args):
 
         if tb_writer is not None:
             tb_writer.add_scalar("train/epoch", epoch, params.batch_idx_train)
+        if wandb_run is not None:
+            wandb_run.log({"train/epoch": epoch}, params.batch_idx_train)
 
         params.cur_epoch = epoch
 
