@@ -53,6 +53,7 @@ def main():
     )
 
     sysdef_string = set(["<blk>", "<unk>", "<sos/eos>", " "])
+    punctuations = ["、", "。", ",", "."]
 
     token_set = set()
     logging.info(f"Creating vocabulary from {args.train_cut}.")
@@ -61,7 +62,7 @@ def main():
         for sup in cut.supervisions:
             token_set.update(sup.text)
 
-    token_set = ["<blk>"] + sorted(token_set - sysdef_string) + ["<unk>", "<sos/eos>"]
+    token_set = ["<blk>"] + punctuations + sorted(token_set - sysdef_string) + ["<unk>", "<sos/eos>"]
     args.lang_dir.mkdir(parents=True, exist_ok=True)
     (args.lang_dir / "tokens.txt").write_text(
         "\n".join(f"{t}\t{i}" for i, t in enumerate(token_set))
