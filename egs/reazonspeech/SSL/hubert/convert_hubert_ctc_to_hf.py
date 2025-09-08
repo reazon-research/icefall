@@ -1,12 +1,20 @@
+import json
 from collections import OrderedDict
 from functools import partial
+from tempfile import NamedTemporaryFile
 
 import torch
 import torch.nn as nn
 from finetune_ce import get_model, get_params, get_parser
 from tokenizer import Tokenizer
 from icefall.checkpoint import load_checkpoint
-from transformers import HubertForCTC, HubertConfig
+from transformers import (
+    HubertForCTC,
+    HubertConfig,
+    Wav2Vec2FeatureExtractor,
+    Wav2Vec2CTCTokenizer,
+    Wav2Vec2Processor,
+)
 
 torch.load = partial(torch.load, map_location=torch.device("cpu"))
 
@@ -38,9 +46,21 @@ def main():
     hf_model = HubertForCTC(config=HubertConfig(vocab_size=params.vocab_size))
     hf_model.load_state_dict(state_dict)
 
+    extractor = Wav2Vec2FeatureExtractor()  # TODO: tempfile
+    with NamedTemporaryFile(mode="w+", suffix=".json") as vocab_file, open(params.lang / "tokens.txt") as rf:
+        data = [line.strip().split("\t") for line in rf.readlines()]
+        json_data = {k: int(v) for k, v in data}
+        json.dump(json_data, vocab_file, ensure_ascii=False)
+        vocab_file.seek(0)
+        tokenizer = Wav2Vec2CTCTokenizer(
+            vocab_file=vocab_file.name,
+            bos_token="<sos/eos>",
+            eos_token="<sos/eos>",
+            pad_token="<blk>",
+        )
+    processor = Wav2Vec2Processor(extractor, tokenizer)
     hf_model.push_to_hub(args.upload_to, private=True)
-
-    # TODO: Tokenizer conversion, then upload processor
+    processor.push_to_hub(args.upload_to, private=True)
 
 
 def get_converted_state_dict(model: nn.Module) -> OrderedDict:
