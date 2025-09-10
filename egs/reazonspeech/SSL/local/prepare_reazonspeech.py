@@ -37,27 +37,24 @@ REAZONSPEECH = (
     "all-v1",
 )
 
-PUNCTUATIONS = {ord(x): "" for x in "、。「」『』，,？！!!?!?"}
-ZENKAKU = "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ０１２３４５６７８９"
-HANKAKU = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+PUNCTUATIONS = {"、", "。", ",", ".", "！", "？", "!", "?"}
+SPECIALS = {ord(x): "" for x in "、。「」『』，,？！!!?!?" if x not in PUNCTUATIONS}
+ZENKAKU = "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ０１２３４５６７８９！？，．"
+HANKAKU = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?,."
 ZEN2HAN = str.maketrans(ZENKAKU, HANKAKU)
 
 
-def normalize(s):
+def normalize(s, remove_punctuations: bool = False):
     """
     Convert full-width characters to half-width, and remove punctuations.
     :param s: str, input string.
     :return: str, normalized string.
     """
-    if is_module_available("num2words"):
-        import num2words
+    if remove_punctuations:
+        s = s.translate(SPECIALS).translate({ord(x) for x in PUNCTUATIONS}).translate(ZEN2HAN)
     else:
-        raise ImportError(
-            "To process the ReazonSpeech corpus, please install optional dependency: pip install num2words"
-        )
-    s = s.translate(PUNCTUATIONS).translate(ZEN2HAN)
-    conv = lambda m: num2words.num2words(m.group(0), lang="ja")
-    return re.sub(r"\d+\.?\d*", conv, s)
+        s = s.translate(SPECIALS).translate(ZEN2HAN)
+    return s
 
 
 def write_to_json(data, filename):
@@ -75,6 +72,7 @@ def download_reazonspeech(
     target_dir: Pathlike = ".",
     dataset_dir: Optional[Pathlike] = None,
     dataset_part: Optional[str] = "auto",
+    remove_punctuations: bool = False,
     num_jobs: int = 12,
 ) -> Path:
     """
@@ -92,7 +90,7 @@ def download_reazonspeech(
         )
     target_dir = Path(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    corpus_dir = target_dir / "ReazonSpeech"
+    corpus_dir = target_dir / ("ReazonSpeech" if remove_punctuations else "ReazonSpeech-punc")
 
     if dataset_part == "auto":
         dataset_part = "small-v1"
@@ -115,7 +113,7 @@ def download_reazonspeech(
     def format_example(example: dict, idx: int) -> dict:
         example["id"] = str(idx)
         example["audio_filepath"] = example["audio"]["path"]
-        example["text"] = normalize(example["transcription"])
+        example["text"] = normalize(example["transcription"], remove_punctuations)
         example["duration"] = sf.info(example["audio"]["path"]).duration
         return example
 
@@ -274,9 +272,10 @@ if __name__ == "__main__":
     parser.add_argument("--dataset-dir", type=str, default=None)
     parser.add_argument("--corpus-dir", type=str, default=None)
     parser.add_argument("--part", type=str, default="all")
+    parser.add_argument("--remove-punctuations", action="store_true", default=False)
     args = parser.parse_args()
 
     if args.task == "download":
-        download_reazonspeech(target_dir=args.target_dir, dataset_dir=args.dataset_dir, dataset_part=args.part)
+        download_reazonspeech(target_dir=args.target_dir, dataset_dir=args.dataset_dir, dataset_part=args.part, remove_punctuations=args.remove_punctuations, num_jobs=64)
     else:
         prepare_reazonspeech(corpus_dir=args.corpus_dir, output_dir=args.target_dir, dataset_part=args.part, num_jobs=12)

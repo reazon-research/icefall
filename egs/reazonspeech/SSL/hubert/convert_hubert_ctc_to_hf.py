@@ -1,3 +1,4 @@
+import contextlib
 import json
 from collections import OrderedDict
 from functools import partial
@@ -15,6 +16,8 @@ from transformers import (
     Wav2Vec2CTCTokenizer,
     Wav2Vec2Processor,
 )
+from tokenizers.implementations import SentencePieceUnigramTokenizer
+from transformers import PreTrainedTokenizerFast
 
 torch.load = partial(torch.load, map_location=torch.device("cpu"))
 
@@ -47,9 +50,21 @@ def main():
     hf_model.load_state_dict(state_dict)
 
     extractor = Wav2Vec2FeatureExtractor()  # TODO: tempfile
-    with NamedTemporaryFile(mode="w+", suffix=".json") as vocab_file, open(params.lang / "tokens.txt") as rf:
-        data = [line.strip().split("\t") for line in rf.readlines()]
-        json_data = {k: int(v) for k, v in data}
+    with NamedTemporaryFile(mode="w+", suffix=".json") as vocab_file, open(params.lang / "tokens.txt") if args.lang_type == "char" else contextlib.nullcontext() as rf:
+        if args.lang_type == "char":
+            data = [line.strip().split("\t") for line in rf.readlines()]
+            json_data = {k: int(v) for k, v in data}
+        else:
+            tokenizer_model = args.lang / "bpe.model"
+            spm_tokenizer = SentencePieceUnigramTokenizer.from_spm(tokenizer_model)
+            tokenizer = PreTrainedTokenizerFast(
+                tokenizer_object=spm_tokenizer._tokenizer,
+                unk_token="<unk>",
+                bos_token="<sos/eos>",
+                eos_token="<sos/eos>",
+                pad_token="<blk>",
+            )
+            json_data = {k: int(v) for k, v in tokenizer.get_vocab().items()}
         json.dump(json_data, vocab_file, ensure_ascii=False)
         vocab_file.seek(0)
         tokenizer = Wav2Vec2CTCTokenizer(

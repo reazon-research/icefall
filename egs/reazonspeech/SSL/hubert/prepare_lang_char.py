@@ -53,7 +53,7 @@ def main():
     )
 
     sysdef_string = set(["<blk>", "<unk>", "<sos/eos>", " "])
-    punctuations = ["、", "。", ",", "."]
+    punctuations = ["、", "。", ",", ".", "!", "?"]
 
     token_set = set()
     logging.info(f"Creating vocabulary from {args.train_cut}.")
