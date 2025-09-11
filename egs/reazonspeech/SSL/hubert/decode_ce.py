@@ -19,7 +19,7 @@
 """
 Usage:
 (1) greedy search
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -27,7 +27,7 @@ Usage:
     --decoding-method greedy_search
 
 (2) beam search (not recommended)
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -36,7 +36,7 @@ Usage:
     --beam-size 4
 
 (3) modified beam search
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -45,7 +45,7 @@ Usage:
     --beam-size 4
 
 (4) fast beam search (one best)
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -56,7 +56,7 @@ Usage:
     --max-states 64
 
 (5) fast beam search (nbest)
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -69,7 +69,7 @@ Usage:
     --nbest-scale 0.5
 
 (6) fast beam search (nbest oracle WER)
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -82,7 +82,7 @@ Usage:
     --nbest-scale 0.5
 
 (7) fast beam search (with LG)
-./hubert/decode.py \
+./hubert/decode_ce.py \
     --epoch 28 \
     --avg 15 \
     --exp-dir ./hubert/exp \
@@ -92,7 +92,6 @@ Usage:
     --max-contexts 8 \
     --max-states 64
 """
-
 
 import argparse
 import logging
@@ -106,7 +105,7 @@ import k2
 import sentencepiece as spm
 import torch
 import torch.nn as nn
-from asr_datamodule import LibriSpeechAsrDataModule
+from asr_datamodule import ReazonSpeechAsrDataModule
 from beam_search import (
     beam_search,
     fast_beam_search_nbest,
@@ -123,6 +122,7 @@ from beam_search import (
 )
 from finetune_ce import add_model_arguments, get_model, get_params
 from hubert_ce import add_hubert_arguments
+from tokenizer import Tokenizer
 
 from icefall import ContextGraph, LmScorer, NgramLm
 from icefall.checkpoint import (
@@ -194,16 +194,9 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--bpe-model",
-        type=str,
-        default="data/lang_bpe_500/bpe.model",
-        help="Path to the BPE model",
-    )
-
-    parser.add_argument(
         "--lang-dir",
         type=Path,
-        default="data/lang_bpe_500",
+        default="data/lang_char",
         help="The lang dir containing word table and LG graph",
     )
 
@@ -279,7 +272,7 @@ def get_parser():
         "--context-size",
         type=int,
         default=2,
-        help="The context size in the decoder. 1 means bigram; " "2 means tri-gram",
+        help="The context size in the decoder. 1 means bigram; 2 means tri-gram",
     )
     parser.add_argument(
         "--max-sym-per-frame",
@@ -740,7 +733,8 @@ def save_results(
 @torch.no_grad()
 def main():
     parser = get_parser()
-    LibriSpeechAsrDataModule.add_arguments(parser)
+    ReazonSpeechAsrDataModule.add_arguments(parser)
+    Tokenizer.add_arguments(parser)
     LmScorer.add_arguments(parser)
     args = parser.parse_args()
     args.exp_dir = Path(args.exp_dir)
@@ -814,10 +808,9 @@ def main():
 
     logging.info(f"Device: {device}")
 
-    sp = spm.SentencePieceProcessor()
-    sp.load(params.bpe_model)
+    sp = Tokenizer.load(args.lang, args.lang_type)
 
-    # <blk> and <unk> are defined in local/train_bpe_model.py
+    # <blk> is defined in local/train_bpe_model.py
     params.blank_id = sp.piece_to_id("<blk>")
     params.unk_id = sp.piece_to_id("<unk>")
     params.vocab_size = sp.get_piece_size()
@@ -834,8 +827,7 @@ def main():
             ]
             if len(filenames) == 0:
                 raise ValueError(
-                    f"No checkpoints found for"
-                    f" --iter {params.iter}, --avg {params.avg}"
+                    f"No checkpoints found for --iter {params.iter}, --avg {params.avg}"
                 )
             elif len(filenames) < params.avg:
                 raise ValueError(
@@ -863,8 +855,7 @@ def main():
             ]
             if len(filenames) == 0:
                 raise ValueError(
-                    f"No checkpoints found for"
-                    f" --iter {params.iter}, --avg {params.avg}"
+                    f"No checkpoints found for --iter {params.iter}, --avg {params.avg}"
                 )
             elif len(filenames) < params.avg + 1:
                 raise ValueError(
@@ -989,36 +980,24 @@ def main():
 
     # we need cut ids to display recognition results.
     args.return_cuts = True
-    librispeech = LibriSpeechAsrDataModule(args)
+    reazonspeech = ReazonSpeechAsrDataModule(args)
 
-    dev_clean_cuts = librispeech.dev_clean_cuts()
-    dev_other_cuts = librispeech.dev_other_cuts()
+    dev_cuts = reazonspeech.dev_cuts()
+    test_cuts = reazonspeech.test_cuts()
 
-    dev_clean_dl = librispeech.test_dataloaders(
-        dev_clean_cuts,
+    dev_dl = reazonspeech.test_dataloaders(
+        dev_cuts,
         do_normalize=params.do_normalize,
     )
-    dev_other_dl = librispeech.test_dataloaders(
-        dev_other_cuts,
-        do_normalize=params.do_normalize,
-    )
-
-    test_clean_cuts = librispeech.test_clean_cuts()
-    test_other_cuts = librispeech.test_other_cuts()
-
-    test_clean_dl = librispeech.test_dataloaders(
-        test_clean_cuts,
-        do_normalize=params.do_normalize,
-    )
-    test_other_dl = librispeech.test_dataloaders(
-        test_other_cuts,
+    test_dl = reazonspeech.test_dataloaders(
+        test_cuts,
         do_normalize=params.do_normalize,
     )
 
-    test_sets = ["dev-clean", "dev-other", "test-clean", "test-other"]
-    test_dl = [dev_clean_dl, dev_other_dl, test_clean_dl, test_other_dl]
+    test_sets = ["dev", "test"]
+    test_dls = [dev_dl, test_dl]
 
-    for test_set, test_dl in zip(test_sets, test_dl):
+    for test_set, test_dl in zip(test_sets, test_dls):
         results_dict = decode_dataset(
             dl=test_dl,
             params=params,
