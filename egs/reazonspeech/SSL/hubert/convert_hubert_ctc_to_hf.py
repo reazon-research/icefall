@@ -2,6 +2,7 @@ import contextlib
 import json
 from collections import OrderedDict
 from functools import partial
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import torch
@@ -27,6 +28,10 @@ def main():
     Tokenizer.add_arguments(parser)
     parser.add_argument("--filename", type=str, required=True)
     parser.add_argument("--upload-to", type=str, required=True)
+    parser.add_argument("--average", action="store_true", default=False)
+    parser.add_argument("--checkpoints", type=int, nargs="+", default=[])
+    parser.add_argument("--start", type=int)
+    parser.add_argument("--end", type=int)
 
     args = parser.parse_args()
     params = get_params()
@@ -42,9 +47,31 @@ def main():
     params.use_ctc = True
 
     model = get_model(params)
-    # Load checkponint
-    _ = load_checkpoint(args.filename, model=model)
-    state_dict = get_converted_state_dict(model)
+    # Load checkpoint
+    if not args.average:
+        _ = load_checkpoint(args.filename, model=model)
+        state_dict = get_converted_state_dict(model)
+    else:
+        assert (args.start is not None and args.end is not None) or len(args.checkpoints) > 0
+        checkpoints = []
+        for checkpoint in Path(args.filename).parent.glob("checkpoint-*.pt"):
+            step = int(checkpoint.name.removeprefix("checkpoint-").removesuffix(".pt"))
+            if args.checkpoints:
+                if step in args.checkpoints:
+                    checkpoints.append(checkpoint)
+            elif args.start <= step <= args.end:
+                checkpoints.append(checkpoint)
+        state_dict = None
+        for checkpoint in checkpoints:
+            _ = load_checkpoint(checkpoint, model=model)
+            current_state_dict = get_converted_state_dict(model)
+            if state_dict is None:
+                state_dict = current_state_dict
+            else:
+                for n, p in current_state_dict.items():
+                    state_dict[n] = state_dict[n] + p
+        for n in state_dict.keys():
+            state_dict[n] /= len(checkpoints)
 
     hf_model = HubertForCTC(config=HubertConfig(vocab_size=params.vocab_size))
     hf_model.load_state_dict(state_dict)
