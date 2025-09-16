@@ -20,7 +20,15 @@ def main():
     _ = load_checkpoint(args.filename, model=model)
     state_dict = get_converted_state_dict(model)
 
-    hf_model = HubertModel(config=HubertConfig())
+    hf_model = HubertModel(
+        config=HubertConfig(
+            num_hidden_layers=params.encoder_layers,
+            hidden_size=params.encoder_embed_dim,
+            intermediate_size=params.encoder_ffn_embed_dim,
+            num_attention_heads=params.encoder_attention_heads,
+            do_stable_layer_norm=params.layer_norm_first,
+        )
+    )
     hf_model.load_state_dict(state_dict)
 
     hf_model.push_to_hub(args.upload_to, private=True)
