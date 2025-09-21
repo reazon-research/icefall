@@ -56,7 +56,7 @@ import sentencepiece as spm
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
-from asr_datamodule import LibriSpeechAsrDataModule
+from asr_datamodule import ReazonSpeechAsrDataModule
 from decoder import Decoder
 from hubert_ce import HubertModel
 from joiner import Joiner
@@ -1352,13 +1352,9 @@ def run(rank, world_size, args):
     if params.inf_check:
         register_inf_check_hooks(model)
 
-    librispeech = LibriSpeechAsrDataModule(args)
+    reazonspeech = ReazonSpeechAsrDataModule(args)
 
-    train_cuts = (
-        librispeech.train_all_shuf_cuts()
-        if params.full_libri
-        else librispeech.train_clean_100_cuts()
-    )
+    train_cuts = reazonspeech.train_cuts()
 
     def remove_short_and_long_utt(c: Cut):
         # Keep only utterances with duration between 1 second and 20 seconds
@@ -1386,16 +1382,15 @@ def run(rank, world_size, args):
     else:
         sampler_state_dict = None
 
-    train_dl = librispeech.train_dataloaders(
+    train_dl = reazonspeech.train_dataloaders(
         train_cuts,
         do_normalize=params.do_normalize,
         sampler_state_dict=sampler_state_dict,
     )
 
-    valid_cuts = librispeech.dev_clean_cuts()
-    valid_cuts += librispeech.dev_other_cuts()
+    valid_cuts = reazonspeech.dev_cuts()
 
-    valid_dl = librispeech.valid_dataloaders(
+    valid_dl = reazonspeech.valid_dataloaders(
         valid_cuts,
         do_normalize=params.do_normalize,
     )
@@ -1464,7 +1459,7 @@ def run(rank, world_size, args):
 def display_and_save_batch(
     batch: dict,
     params: AttributeDict,
-    sp: spm.SentencePieceProcessor,
+    sp: Tokenizer,
 ) -> None:
     """Display the batch statistics and save the batch into disk.
 
@@ -1495,7 +1490,7 @@ def scan_pessimistic_batches_for_oom(
     model: Union[nn.Module, DDP],
     train_dl: torch.utils.data.DataLoader,
     optimizer: torch.optim.Optimizer,
-    sp: spm.SentencePieceProcessor,
+    sp: Tokenizer,
     params: AttributeDict,
 ):
     from lhotse.dataset import find_pessimistic_batches
@@ -1535,7 +1530,7 @@ def scan_pessimistic_batches_for_oom(
 
 def main():
     parser = get_parser()
-    LibriSpeechAsrDataModule.add_arguments(parser)
+    ReazonSpeechAsrDataModule.add_arguments(parser)
     Tokenizer.add_arguments(parser)
     args = parser.parse_args()
     args.exp_dir = Path(args.exp_dir)
