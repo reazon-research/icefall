@@ -42,7 +42,6 @@ It supports finetuning with:
   - transducer loss & ctc loss, with `--use-transducer True --use-ctc True`
 """
 
-
 import argparse
 import copy
 import logging
@@ -61,6 +60,7 @@ from asr_datamodule import LibriSpeechAsrDataModule
 from decoder import Decoder
 from hubert_ce import HubertModel
 from joiner import Joiner
+from tokenizer import Tokenizer
 from lhotse.cut import Cut
 from lhotse.dataset.sampling.base import CutSampler
 from lhotse.utils import fix_random_seed
@@ -555,7 +555,7 @@ def get_parser():
         "--context-size",
         type=int,
         default=2,
-        help="The context size in the decoder. 1 means bigram; " "2 means tri-gram",
+        help="The context size in the decoder. 1 means bigram; 2 means tri-gram",
     )
 
     parser.add_argument(
@@ -578,7 +578,7 @@ def get_parser():
         "--am-scale",
         type=float,
         default=0.0,
-        help="The scale to smooth the loss with am (output of encoder network)" "part.",
+        help="The scale to smooth the loss with am (output of encoder network)part.",
     )
 
     parser.add_argument(
@@ -842,7 +842,7 @@ def load_checkpoint_if_available(
     if params.start_batch > 0:
         filename = params.exp_dir / f"checkpoint-{params.start_batch}.pt"
     elif params.start_epoch > 1:
-        filename = params.exp_dir / f"epoch-{params.start_epoch-1}.pt"
+        filename = params.exp_dir / f"epoch-{params.start_epoch - 1}.pt"
     else:
         return None
 
@@ -1239,7 +1239,7 @@ def train_one_epoch(
             model.train()
             logging.info(f"Epoch {params.cur_epoch}, validation: {valid_info}")
             logging.info(
-                f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated()//1000000}MB"
+                f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated() // 1000000}MB"
             )
             if tb_writer is not None:
                 valid_info.write_summary(
@@ -1287,8 +1287,10 @@ def run(rank, world_size, args):
         device = torch.device("cuda", rank)
     logging.info(f"Device: {device}")
 
-    sp = spm.SentencePieceProcessor()
-    sp.load(params.bpe_model)
+    # sp = spm.SentencePieceProcessor()
+    # sp.load(params.bpe_model)
+
+    sp = Tokenizer.load(args.lang, args.lang_type)
 
     # <blk> is defined in local/train_bpe_model.py
     params.blank_id = sp.piece_to_id("<blk>")
@@ -1527,13 +1529,14 @@ def scan_pessimistic_batches_for_oom(
             display_and_save_batch(batch, params=params, sp=sp)
             raise
         logging.info(
-            f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated()//1000000}MB"
+            f"Maximum memory allocated so far is {torch.cuda.max_memory_allocated() // 1000000}MB"
         )
 
 
 def main():
     parser = get_parser()
     LibriSpeechAsrDataModule.add_arguments(parser)
+    Tokenizer.add_arguments(parser)
     args = parser.parse_args()
     args.exp_dir = Path(args.exp_dir)
 
