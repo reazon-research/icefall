@@ -1,5 +1,6 @@
 import argparse
 import io
+import json
 from dataclasses import dataclass, asdict, fields, MISSING
 from pathlib import Path
 
@@ -95,9 +96,13 @@ class ModelParams:
         if self.num_classes is None:
             self.num_classes = [504]
 
+    def to_dict(self) -> dict:
+        """Convert dataclass to dict."""
+        return asdict(self)
+
     def to_attribute_dict(self) -> AttributeDict:
         """Convert dataclass to AttributeDict for model initialization."""
-        return AttributeDict(asdict(self))
+        return AttributeDict(self.to_dict())
 
     def __init__(self, checkpoint_data: dict):
         """Initialize params from checkpoint data.
@@ -189,8 +194,24 @@ def main(args):
             repo_type="model",
         )
 
-    # TODO: Upload model params as json
-    # TODO: Upload tokenizer
+    # Upload model params as json
+    with io.StringIO() as buf:
+        json.dump(params.to_dict(), buf, indent=4)
+        api.upload_file(
+            path_or_fileobj=buf.getvalue(),
+            path_in_repo="config.json",
+            repo_id=args.upload_to,
+            repo_type="model",
+        )
+
+    # Upload tokenizer
+    tokenizer_path = args.lang
+    api.upload_folder(
+        repo_id=args.upload_to,
+        folder_path=tokenizer_path,
+        path_in_repo="lang",
+        repo_type="model",
+    )
 
 
 if __name__ == "__main__":
