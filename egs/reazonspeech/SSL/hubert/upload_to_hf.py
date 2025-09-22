@@ -9,6 +9,7 @@ from huggingface_hub import HfApi
 from icefall.utils import AttributeDict
 
 from finetune_ce import get_model
+from tokenizer import Tokenizer
 
 
 @dataclass(init=False)
@@ -85,8 +86,27 @@ class ModelParams:
     attn_type: str = ""
     pos_enc_type: str = "abs"
 
-    # Number of classes
+    # ASR model params
+    decoder_dim: int = 512
+    joiner_dim: int = 512
+    use_ctc: bool = False
+    use_transducer: bool = True
+    lm_scale: float = 0.25
+    am_scale: float = 0.0
+    simple_loss_scale: float = 0.5
+    ctc_loss_scale: float = 0.2
+    prune_range: int = 5
+    context_size: int = 2
+    blank_id: int = 0
+    vocab_size: int = 504
     num_classes: list = None
+
+    # Tokenizer params
+    lang: Path = None
+    lang_type: str = None
+
+    # Feature extractor params
+    do_normalize: bool = False
 
     def __post_init__(self):
         if self.latent_temp is None:
@@ -94,7 +114,7 @@ class ModelParams:
         if self.loss_weights is None:
             self.loss_weights = [10]
         if self.num_classes is None:
-            self.num_classes = [504]
+            self.num_classes = [self.vocab_size]
 
     def to_dict(self) -> dict:
         """Convert dataclass to dict."""
@@ -121,26 +141,20 @@ class ModelParams:
             else:
                 setattr(self, f.name, None)
 
-        # Override from checkpoint params if available
-        saved_params = checkpoint_data.get("params", {})
-        if isinstance(saved_params, dict):
-            for key, value in saved_params.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
-                else:
-                    print(f"skip: {key}")
+        for key, value in checkpoint_data.items():
+            if key == "params":
+                continue
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                # Print skipped keys that are not attributes (e.g., model, optimizer)
+                print(f"skip: {key}")
 
         # Infer from state dict if present
         state_dict = checkpoint_data.get("model", {})
         if isinstance(state_dict, dict):
             if "mask_emb" in state_dict and hasattr(state_dict["mask_emb"], "shape"):
                 self.encoder_embed_dim = state_dict["mask_emb"].shape[0]
-
-            if "final_proj.weight" in state_dict and hasattr(
-                state_dict["final_proj.weight"], "shape"
-            ):
-                total_classes = state_dict["final_proj.weight"].shape[0]
-                self.num_classes = [total_classes]
 
             encoder_layer_keys = [
                 k for k in state_dict.keys() if "encoder.layers." in k
@@ -171,8 +185,13 @@ def get_args():
 
 def main(args):
     api = HfApi()
-    data = torch.load(args.filepath, weights_only=False)
+    data = torch.load(
+        args.filepath, weights_only=False, map_location=torch.device("cpu")
+    )
     model_state_dict = data["model"]
+    sp = Tokenizer.load(data["lang"], data["lang_type"])
+    data["blank_id"] = sp.piece_to_id("<blk>")
+    data["vocab_size"] = sp.get_piece_size()
 
     # Initialize model parameters from checkpoint
     params = ModelParams(data)
@@ -195,17 +214,18 @@ def main(args):
         )
 
     # Upload model params as json
-    with io.StringIO() as buf:
-        json.dump(params.to_dict(), buf, indent=4)
-        api.upload_file(
-            path_or_fileobj=buf.getvalue(),
-            path_in_repo="config.json",
-            repo_id=args.upload_to,
-            repo_type="model",
-        )
+    params_dict = {
+        k: v for k, v in params.to_dict().items() if k not in ("lang", "lang_type")
+    }
+    api.upload_file(
+        path_or_fileobj=json.dumps(params_dict, indent=4).encode("utf-8"),
+        path_in_repo="config.json",
+        repo_id=args.upload_to,
+        repo_type="model",
+    )
 
     # Upload tokenizer
-    tokenizer_path = args.lang
+    tokenizer_path = params.lang
     api.upload_folder(
         repo_id=args.upload_to,
         folder_path=tokenizer_path,
