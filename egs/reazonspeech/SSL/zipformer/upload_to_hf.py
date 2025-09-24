@@ -11,6 +11,7 @@ from huggingface_hub import HfApi
 from icefall.utils import AttributeDict
 
 from finetune import get_model
+from hubert_ce import HubertModel
 from tokenizer import Tokenizer
 
 
@@ -118,7 +119,6 @@ class ModelParams:
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
-                # Report unknown keys for clarity
                 print(f"skip: {key}")
 
         self.__post_init__()
@@ -174,6 +174,11 @@ def get_args():
     parser.add_argument(
         "--filepath", type=str, required=True, help="Path or regex for checkpoint(s)"
     )
+    parser.add_argument(
+        "--pretrained",
+        action="store_true",
+        help="Upload self-supervised pretrained model (no tokenizer) using pretrain.py",
+    )
     parser.add_argument("--upload-to", type=str, required=True)
     return parser.parse_args()
 
@@ -190,12 +195,21 @@ def main(args):
 
     data = average_model_weights(files)
     model_state = data["model"]
-    sp = Tokenizer.load(data["lang"], data["lang_type"])
-    data["blank_id"] = sp.piece_to_id("<blk>")
-    data["vocab_size"] = sp.get_piece_size()
 
     params = ModelParams(data)
-    model = get_model(params.to_attribute_dict())
+    params_ad = params.to_attribute_dict()
+
+    if args.pretrained:
+        model = HubertModel(params_ad)
+    else:
+        # ASR fine-tuned: needs tokenizer info
+        sp = Tokenizer.load(data["lang"], data["lang_type"])
+        data["blank_id"] = sp.piece_to_id("<blk>")
+        data["vocab_size"] = sp.get_piece_size()
+        params = ModelParams(data)
+        params_ad = params.to_attribute_dict()
+        model = get_model(params_ad)
+
     model.load_state_dict(model_state)
 
     api.create_repo(
@@ -212,7 +226,7 @@ def main(args):
             repo_type="model",
         )
 
-    # Upload parameters (excluding tokenizer paths)
+    # Upload params JSON (exclude tokenizer paths)
     params_json = {
         k: v for k, v in params.to_dict().items() if k not in ("lang", "lang_type")
     }
@@ -223,13 +237,14 @@ def main(args):
         repo_type="model",
     )
 
-    # Upload tokenizer folder
-    api.upload_folder(
-        repo_id=args.upload_to,
-        folder_path=params.lang,
-        path_in_repo="lang",
-        repo_type="model",
-    )
+    # Upload tokenizer only for fine-tuned ASR
+    if not args.pretrained:
+        api.upload_folder(
+            repo_id=args.upload_to,
+            folder_path=params.lang,
+            path_in_repo="lang",
+            repo_type="model",
+        )
 
 
 if __name__ == "__main__":
