@@ -127,7 +127,9 @@ class ModelParams:
 def find_matching_files(pattern: str) -> List[Path]:
     parent_dir = Path(pattern).parent
     filename_regex = re.compile(pattern=pattern.split("/")[-1])
-    return [file for file in parent_dir.glob("*") if filename_regex.match(file.name)]
+    return sorted(
+        [file for file in parent_dir.glob("*") if filename_regex.match(file.name)]
+    )
 
 
 def average_model_weights(file_paths: List[Path]) -> dict:
