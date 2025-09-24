@@ -1,8 +1,10 @@
 import argparse
 import io
 import json
+import re
 from dataclasses import dataclass, asdict, fields, MISSING
 from pathlib import Path
+from typing import List
 
 import torch
 from huggingface_hub import HfApi
@@ -175,9 +177,75 @@ class ModelParams:
         self.__post_init__()
 
 
+def find_matching_files(pattern: str) -> List[Path]:
+    parent_dir = Path(pattern).parent
+    filename_regex = re.compile(pattern=pattern.split("/")[-1])
+    return [file for file in parent_dir.glob("*") if filename_regex.match(file.name)]
+
+
+def average_model_weights(file_paths: List[Path]) -> dict:
+    """Average model state dicts from multiple checkpoint files."""
+    if not file_paths:
+        raise ValueError("No files provided for averaging")
+
+    if len(file_paths) == 1:
+        # Single file, no averaging needed
+        data = torch.load(
+            file_paths[0], weights_only=False, map_location=torch.device("cpu")
+        )
+        return data
+
+    print(f"Averaging {len(file_paths)} checkpoint files:")
+    for fp in file_paths:
+        print(f"  - {fp}")
+
+    # Load first checkpoint as reference
+    first_data = torch.load(
+        file_paths[0], weights_only=False, map_location=torch.device("cpu")
+    )
+    averaged_state_dict = {}
+
+    # Initialize averaged state dict with zeros
+    for key, tensor in first_data["model"].items():
+        averaged_state_dict[key] = torch.zeros_like(tensor, dtype=torch.float32)
+
+    # Sum all model weights
+    for file_path in file_paths:
+        data = torch.load(
+            file_path, weights_only=False, map_location=torch.device("cpu")
+        )
+        model_state_dict = data["model"]
+
+        for key, tensor in model_state_dict.items():
+            if key in averaged_state_dict:
+                averaged_state_dict[key] += tensor.float()
+            else:
+                print(f"Warning: Key {key} not found in first checkpoint, skipping")
+
+    # Average the weights
+    num_files = len(file_paths)
+    for key in averaged_state_dict:
+        averaged_state_dict[key] /= num_files
+        # Convert back to original dtype
+        averaged_state_dict[key] = averaged_state_dict[key].to(
+            first_data["model"][key].dtype
+        )
+
+    # Use the first checkpoint's metadata with averaged model weights
+    result_data = first_data.copy()
+    result_data["model"] = averaged_state_dict
+
+    return result_data
+
+
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--filepath", type=Path, required=True)
+    parser.add_argument(
+        "--filepath",
+        type=str,
+        required=True,
+        help="Path or regex pattern to match checkpoint files",
+    )
     parser.add_argument("--upload-to", type=str, required=True)
     args = parser.parse_args()
     return args
@@ -185,9 +253,19 @@ def get_args():
 
 def main(args):
     api = HfApi()
-    data = torch.load(
-        args.filepath, weights_only=False, map_location=torch.device("cpu")
-    )
+
+    # Check if filepath is a regex pattern or single file
+    if Path(args.filepath).exists():
+        # Single file path
+        matching_files = [Path(args.filepath)]
+    else:
+        # Treat as regex pattern
+        matching_files = find_matching_files(args.filepath)
+        if not matching_files:
+            raise ValueError(f"No files found matching pattern: {args.filepath}")
+
+    # Load and potentially average checkpoints
+    data = average_model_weights(matching_files)
     model_state_dict = data["model"]
     sp = Tokenizer.load(data["lang"], data["lang_type"])
     data["blank_id"] = sp.piece_to_id("<blk>")
