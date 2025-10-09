@@ -18,13 +18,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import math
 from typing import List, Tuple
 
-import numpy as np
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from utils import Fp32GroupNorm, Fp32LayerNorm, TransposeLast
 
 

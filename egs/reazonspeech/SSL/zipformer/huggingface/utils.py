@@ -1,7 +1,6 @@
 import math
-from typing import Tuple, Optional, Callable, List
+from typing import Optional, Callable, List
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

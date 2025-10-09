@@ -4,7 +4,6 @@ import math
 import random
 import warnings
 from typing import List, Optional, Tuple, Union
-from icefall.utils import torch_autocast
 
 import torch
 from scaling import (
@@ -1827,7 +1826,7 @@ class RelPositionMultiheadAttentionWeights(nn.Module):
         (num_heads, batch_size, seq_len, seq_len) = attn_weights.shape
 
         with torch.no_grad():
-            with torch_autocast(enabled=False):
+            with torch.amp.autocast("cuda", enabled=False):
                 attn_weights = attn_weights.to(torch.float32)
                 attn_weights_entropy = (
                     -((attn_weights + 1.0e-20).log() * attn_weights)
@@ -2377,32 +2376,3 @@ class ScalarMultiply(nn.Module):
 
     def forward(self, x):
         return x * self.scale
-
-
-def _test_zipformer_main(causal: bool = False):
-    batch_size = 5
-    seq_len = 20
-    # Just make sure the forward pass runs.
-
-    c = Zipformer2(
-        encoder_dim=(64, 96),
-        encoder_unmasked_dim=(48, 64),
-        num_heads=(4, 4),
-        causal=causal,
-        chunk_size=(4,) if causal else (-1,),
-        left_context_frames=(64,),
-    )
-    batch_size = 5
-    seq_len = 20
-    # Just make sure the forward pass runs.
-    f = c(
-        torch.randn(seq_len, batch_size, 64),
-        torch.full((batch_size,), seq_len, dtype=torch.int64),
-    )
-    f[0].sum().backward()
-    c.eval()
-    f = c(
-        torch.randn(seq_len, batch_size, 64),
-        torch.full((batch_size,), seq_len, dtype=torch.int64),
-    )
-    f  # to remove flake8 warnings
