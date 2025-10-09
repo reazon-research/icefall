@@ -3,7 +3,6 @@ import math
 import random
 from typing import Optional, Tuple, Union
 
-import k2
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -1382,14 +1381,8 @@ class SwooshLFunction(torch.autograd.Function):
 class SwooshL(torch.nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """Return Swoosh-L activation."""
-        if torch.jit.is_scripting() or torch.jit.is_tracing():
-            zero = torch.tensor(0.0, dtype=x.dtype, device=x.device)
-            return logaddexp(zero, x - 4.0) - 0.08 * x - 0.035
-        if not x.requires_grad:
-            return k2.swoosh_l_forward(x).to(x.dtype)
-        else:
-            return k2.swoosh_l(x).to(x.dtype)
-        # return SwooshLFunction.apply(x)
+        zero = torch.tensor(0.0, dtype=x.dtype, device=x.device)
+        return logaddexp(zero, x - 4.0) - 0.08 * x - 0.035
 
 
 class SwooshLOnnx(torch.nn.Module):
@@ -1456,14 +1449,8 @@ class SwooshRFunction(torch.autograd.Function):
 class SwooshR(torch.nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """Return Swoosh-R activation."""
-        if torch.jit.is_scripting() or torch.jit.is_tracing():
-            zero = torch.tensor(0.0, dtype=x.dtype, device=x.device)
-            return logaddexp(zero, x - 1.0) - 0.08 * x - 0.313261687
-        if not x.requires_grad:
-            return k2.swoosh_r_forward(x).to(x.dtype)
-        else:
-            return k2.swoosh_r(x).to(x.dtype)
-        # return SwooshRFunction.apply(x)
+        zero = torch.tensor(0.0, dtype=x.dtype, device=x.device)
+        return logaddexp(zero, x - 1.0) - 0.08 * x - 0.313261687
 
 
 class SwooshROnnx(torch.nn.Module):
@@ -1489,80 +1476,6 @@ def SwooshRForward(x: Tensor):
     log_sum = (1.0 + x_offset.exp()).log().to(x.dtype)
     log_sum = torch.where(log_sum == float("inf"), x_offset, log_sum)
     return log_sum - 0.08 * x - 0.313261687
-
-
-class ActivationDropoutAndLinearFunction(torch.autograd.Function):
-    @staticmethod
-    @custom_fwd(device_type="cuda")
-    def forward(
-        ctx,
-        x: Tensor,
-        weight: Tensor,
-        bias: Optional[Tensor],
-        activation: str,
-        dropout_p: float,
-        dropout_shared_dim: Optional[int],
-    ):
-        if dropout_p != 0.0:
-            dropout_shape = list(x.shape)
-            if dropout_shared_dim is not None:
-                dropout_shape[dropout_shared_dim] = 1
-            # else it won't be very memory efficient.
-            dropout_mask = (1.0 / (1.0 - dropout_p)) * (
-                torch.rand(*dropout_shape, device=x.device, dtype=x.dtype) > dropout_p
-            )
-        else:
-            dropout_mask = None
-
-        ctx.save_for_backward(x, weight, bias, dropout_mask)
-
-        ctx.activation = activation
-
-        forward_activation_dict = {
-            "SwooshL": k2.swoosh_l_forward,
-            "SwooshR": k2.swoosh_r_forward,
-        }
-        # it will raise a KeyError if this fails.  This will be an error.  We let it
-        # propagate to the user.
-        activation_func = forward_activation_dict[activation]
-        x = activation_func(x)
-        if dropout_mask is not None:
-            x = x * dropout_mask
-        x = torch.nn.functional.linear(x, weight, bias)
-        return x
-
-    @staticmethod
-    @custom_bwd(device_type="cuda")
-    def backward(ctx, ans_grad: Tensor):
-        saved = ctx.saved_tensors
-        (x, weight, bias, dropout_mask) = saved
-
-        forward_and_deriv_activation_dict = {
-            "SwooshL": k2.swoosh_l_forward_and_deriv,
-            "SwooshR": k2.swoosh_r_forward_and_deriv,
-        }
-        # the following lines a KeyError if the activation is unrecognized.
-        # This will be an error.  We let it propagate to the user.
-        func = forward_and_deriv_activation_dict[ctx.activation]
-
-        y, func_deriv = func(x)
-        if dropout_mask is not None:
-            y = y * dropout_mask
-        # now compute derivative of y w.r.t. weight and bias..
-        # y: (..., in_channels), ans_grad: (..., out_channels),
-        (out_channels, in_channels) = weight.shape
-
-        in_channels = y.shape[-1]
-        g = ans_grad.reshape(-1, out_channels)
-        weight_deriv = torch.matmul(g.t(), y.reshape(-1, in_channels))
-        y_deriv = torch.matmul(ans_grad, weight)
-        bias_deriv = None if bias is None else g.sum(dim=0)
-        x_deriv = y_deriv * func_deriv
-        if dropout_mask is not None:
-            # order versus func_deriv does not matter
-            x_deriv = x_deriv * dropout_mask
-
-        return x_deriv, weight_deriv, bias_deriv, None, None, None
 
 
 class ActivationDropoutAndLinear(torch.nn.Module):
@@ -1620,23 +1533,13 @@ class ActivationDropoutAndLinear(torch.nn.Module):
         self.dropout_shared_dim = dropout_shared_dim
 
     def forward(self, x: Tensor):
-        if not self.training or torch.jit.is_scripting() or torch.jit.is_tracing():
-            if self.activation == "SwooshL":
-                x = SwooshLForward(x)
-            elif self.activation == "SwooshR":
-                x = SwooshRForward(x)
-            else:
-                assert False, self.activation
-            return torch.nn.functional.linear(x, self.weight, self.bias)
-
-        return ActivationDropoutAndLinearFunction.apply(
-            x,
-            self.weight,
-            self.bias,
-            self.activation,
-            float(self.dropout_p),
-            self.dropout_shared_dim,
-        )
+        if self.activation == "SwooshL":
+            x = SwooshLForward(x)
+        elif self.activation == "SwooshR":
+            x = SwooshRForward(x)
+        else:
+            assert False, self.activation
+        return torch.nn.functional.linear(x, self.weight, self.bias)
 
 
 def convert_num_channels(x: Tensor, num_channels: int) -> Tensor:
