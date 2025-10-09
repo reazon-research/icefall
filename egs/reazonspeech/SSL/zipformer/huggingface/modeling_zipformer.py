@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 import torch
@@ -119,7 +120,21 @@ class ZipformerForCTC(PreTrainedModel):
     def __init__(self, config: ZipformerConfig):
         super().__init__(config)
         self.encoder = ZipformerModel(config)
-        self.ctc_output = nn.Linear(config.encoder_dim[-1], config.vocab_size)
+        self.ctc_output = nn.Sequential(
+            nn.Dropout(p=0.1),
+            nn.Linear(max(config.encoder_dim), config.vocab_size),
+        )
+
+    @classmethod
+    def from_icefall_checkpoint(cls, checkpoint_path: os.PathLike, **kwargs):
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        config = ZipformerConfig.from_icefall_checkpoint(checkpoint_path, **kwargs)
+        model = cls(config)
+        state_dict = checkpoint["model"]
+        state_dict.pop("encoder.final_proj.weight")
+        state_dict.pop("encoder.final_proj.bias")
+        model.load_state_dict(state_dict, strict=True)
+        return model
 
     def forward(
         self,

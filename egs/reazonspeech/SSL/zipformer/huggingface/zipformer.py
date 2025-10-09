@@ -115,20 +115,18 @@ class Zipformer2(nn.Module):
                 assert len(x) == len(downsampling_factor) and isinstance(x[0], int)
             return x
 
-        self.output_downsampling_factor = output_downsampling_factor  # int
-        self.downsampling_factor = downsampling_factor  # tuple
-        self.encoder_dim = encoder_dim = _to_tuple(encoder_dim)  # tuple
-        self.encoder_unmasked_dim = encoder_unmasked_dim = _to_tuple(
-            encoder_unmasked_dim
-        )  # tuple
-        num_encoder_layers = _to_tuple(num_encoder_layers)
+        self.output_downsampling_factor = output_downsampling_factor
+        self.downsampling_factor = downsampling_factor
+        self.encoder_dim = encoder_dim
+        self.encoder_unmasked_dim = encoder_unmasked_dim
+        num_encoder_layers = num_encoder_layers
         self.num_encoder_layers = num_encoder_layers
         self.query_head_dim = query_head_dim = _to_tuple(query_head_dim)
         self.value_head_dim = value_head_dim = _to_tuple(value_head_dim)
         pos_head_dim = _to_tuple(pos_head_dim)
-        self.num_heads = num_heads = _to_tuple(num_heads)
-        feedforward_dim = _to_tuple(feedforward_dim)
-        self.cnn_module_kernel = cnn_module_kernel = _to_tuple(cnn_module_kernel)
+        self.num_heads = num_heads
+        feedforward_dim = feedforward_dim
+        self.cnn_module_kernel = cnn_module_kernel
 
         self.causal = causal
         self.chunk_size = chunk_size
