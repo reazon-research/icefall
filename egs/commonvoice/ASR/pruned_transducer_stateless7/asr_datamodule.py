@@ -405,9 +405,13 @@ class CommonVoiceAsrDataModule:
     @lru_cache()
     def train_cuts(self) -> CutSet:
         logging.info("About to get train cuts")
-        return load_manifest_lazy(
-            self.args.cv_manifest_dir / f"cv-{self.args.language}_cuts_train.jsonl.gz"
-        )
+        # Support bilingual manifest
+        if self.args.language in ["bilingual", "ja_en"]:
+            manifest_path = self.args.cv_manifest_dir / "cv-bilingual_cuts_train.jsonl.gz"
+        else:
+            manifest_path = self.args.cv_manifest_dir / f"cv-{self.args.language}_cuts_train.jsonl.gz"
+        logging.info(f"Loading training manifest from: {manifest_path}")
+        return load_manifest_lazy(manifest_path)
 
     @lru_cache()
     def validated_cuts(self) -> CutSet:
@@ -428,13 +432,17 @@ class CommonVoiceAsrDataModule:
     @lru_cache()
     def dev_cuts(self) -> CutSet:
         logging.info("About to get dev cuts")
-        return load_manifest_lazy(
-            self.args.cv_manifest_dir / f"cv-{self.args.language}_cuts_dev.jsonl.gz"
-        )
+        if self.args.language in ["bilingual", "ja_en"]:
+            manifest_path = self.args.cv_manifest_dir / "cv-bilingual_cuts_dev.jsonl.gz"
+        else:
+            manifest_path = self.args.cv_manifest_dir / f"cv-{self.args.language}_cuts_dev.jsonl.gz"
+        return load_manifest_lazy(manifest_path)
 
     @lru_cache()
     def test_cuts(self) -> CutSet:
         logging.info("About to get test cuts")
-        return load_manifest_lazy(
-            self.args.cv_manifest_dir / f"cv-{self.args.language}_cuts_test.jsonl.gz"
-        )
+        if self.args.language in ["bilingual", "ja_en"]:
+            manifest_path = self.args.cv_manifest_dir / "cv-bilingual_cuts_test.jsonl.gz"
+        else:
+            manifest_path = self.args.cv_manifest_dir / f"cv-{self.args.language}_cuts_test.jsonl.gz"
+        return load_manifest_lazy(manifest_path)

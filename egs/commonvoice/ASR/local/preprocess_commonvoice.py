@@ -67,6 +67,16 @@ def normalize_text(utt: str, language: str) -> str:
             repl="",
             string=utt,
         )
+    elif language == "ja":
+        # Japanese text normalization - keep hiragana, katakana, kanji, and spaces
+        # Remove punctuation and other symbols
+        tokens_to_remove = ["、", "。", "「", "」", "『", "』", "（", "）", "［", "］", "｛", "｝", "・", "…", "‥", "〜", "～", "！", "？", "．", "，", "：", "；", """, """, "'", "'", "\"", "\'", "ー"]
+        for token in tokens_to_remove:
+            utt = utt.replace(token, "")
+        # Remove any remaining non-Japanese characters except spaces
+        # Keep hiragana (3040-309F), katakana (30A0-30FF), kanji (4E00-9FAF), and spaces
+        utt = re.sub(r"[^\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\s]", "", utt)
+        return utt.strip()
     else:
         raise NotImplementedError(
             f"""
