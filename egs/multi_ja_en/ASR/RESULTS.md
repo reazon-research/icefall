@@ -95,7 +95,16 @@ The training command is:
 The decoding command is:
 
 ```shell
-TODO
+./zipformer/streaming_decode.py \
+  --epoch 10 \
+  --avg 1 \
+  --causal 1 \
+  --chunk-size 16 \
+  --left-context-frames 128 \
+  --exp-dir ./zipformer/exp-15k15k-streaming \
+  --bpe-model data/lang/bbpe_2000/bbpe.model \
+  --decoding-method greedy_search \
+  --num-decode-streams 2000
 ```
 
 To export the model with sherpa onnx:
@@ -146,17 +155,17 @@ You may also use decode chunk sizes `16`, `32`, `64`, `128`.
 
 Word Error Rates (WERs) listed below:
 
-*Please let us know which script to use to evaluate the streaming model!*
+*TODO: Run streaming_decode.py on test sets to get results*
 
 
 We also include WER% for common English ASR datasets:
 
-*Please let us know which script to use to evaluate the streaming model!*
+*TODO: Evaluate with streaming_decode.py*
 
 
 And CER% for common Japanese datasets:
 
-*Please let us know which script to use to evaluate the streaming model!*
+*TODO: Evaluate with streaming_decode.py*
 
 
 Pre-trained model can be found here: [https://huggingface.co/reazon-research/reazonspeech-k2-v2-ja-en/tree/multi_ja_en_15k15k](https://huggingface.co/reazon-research/reazonspeech-k2-v2-ja-en/tree/multi_ja_en_15k15k)

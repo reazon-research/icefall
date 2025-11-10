@@ -516,9 +516,8 @@ def decode_one_chunk(
     for i in range(len(decode_streams)):
         decode_streams[i].states = states[i]
         decode_streams[i].done_frames += encoder_out_lens[i]
-        # if decode_streams[i].done:
-        # finished_streams.append(i)
-        finished_streams.append(i)
+        if decode_streams[i].done:
+            finished_streams.append(i)
 
     return finished_streams
 
@@ -617,37 +616,18 @@ def decode_dataset(
 
     # decode final chunks of last sequences
     while len(decode_streams):
-        # print("INSIDE LEN DECODE STREAMS")
-        # pdb.set_trace()
-        # print(model.device)
-        # test_device = model.device
-        # print("done")
         finished_streams = decode_one_chunk(
             params=params, model=model, decode_streams=decode_streams
         )
-        # print('INSIDE FOR LOOP ')
-        # print(finished_streams)
-
-        if not finished_streams:
-            print("No finished streams, breaking the loop")
-            break
-
         for i in sorted(finished_streams, reverse=True):
-            try:
-                decode_results.append(
-                    (
-                        decode_streams[i].id,
-                        decode_streams[i].ground_truth.split(),
-                        tokenizer.decode(decode_streams[i].decoding_result()).split(),
-                    )
+            decode_results.append(
+                (
+                    decode_streams[i].id,
+                    decode_streams[i].ground_truth.split(),
+                    tokenizer.decode(decode_streams[i].decoding_result()).split(),
                 )
-                del decode_streams[i]
-            except IndexError as e:
-                print(f"IndexError: {e}")
-                print(f"decode_streams length: {len(decode_streams)}")
-                print(f"finished_streams: {finished_streams}")
-                print(f"i: {i}")
-                continue
+            )
+            del decode_streams[i]
 
     if params.decoding_method == "greedy_search":
         key = "greedy_search"

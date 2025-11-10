@@ -19,34 +19,16 @@
 """
 Usage:
 
-Monolingual:
 ./zipformer/streaming_decode.py \
-    --epoch 28 \
-     --avg 15 \
+    --epoch 10 \
+    --avg 1 \
     --causal 1 \
-    --chunk-size 32 \
-    --left-context-frames 256 \
-    --exp-dir ./zipformer/exp-large \
-    --lang data/lang_char \
-    --num-encoder-layers 2,2,4,5,4,2 \
-    --feedforward-dim 512,768,1536,2048,1536,768 \
-    --encoder-dim 192,256,512,768,512,256 \
-    --encoder-unmasked-dim 192,192,256,320,256,192
-
-Bilingual:
-./zipformer/streaming_decode.py \
-    --bilingual 1 \
-    --epoch 28 \
-     --avg 15 \
-    --causal 1 \
-    --chunk-size 32 \
-    --left-context-frames 256 \
-    --exp-dir ./zipformer/exp-large \
-    --lang data/lang_char \
-    --num-encoder-layers 2,2,4,5,4,2 \
-    --feedforward-dim 512,768,1536,2048,1536,768 \
-    --encoder-dim 192,256,512,768,512,256 \
-    --encoder-unmasked-dim 192,192,256,320,256,192 \
+    --chunk-size 16 \
+    --left-context-frames 128 \
+    --exp-dir ./zipformer/exp-15k15k-streaming \
+    --bpe-model data/lang/bbpe_2000/bbpe.model \
+    --decoding-method greedy_search \
+    --num-decode-streams 2000
 
 """
 
@@ -67,14 +49,11 @@ from asr_datamodule import MultiDatasetAsrDataModule
 from decode_stream import DecodeStream
 from kaldifeat import Fbank, FbankOptions
 from lhotse import CutSet
-from lhotse.cut import Cut
-from multi_dataset import MultiDataset
 from streaming_beam_search import (
     fast_beam_search_one_best,
     greedy_search,
     modified_beam_search,
 )
-from tokenizer import Tokenizer
 from torch import Tensor, nn
 from torch.nn.utils.rnn import pad_sequence
 from train import add_model_arguments, get_model, get_params
@@ -100,13 +79,6 @@ LOG_EPS = math.log(1e-10)
 def get_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-
-    parser.add_argument(
-        "--bilingual",
-        type=str2bool,
-        default=False,
-        help="Whether the model is bilingual or not. 1 = bilingual.",
     )
 
     parser.add_argument(
@@ -561,7 +533,7 @@ def decode_dataset(
     cuts: CutSet,
     params: AttributeDict,
     model: nn.Module,
-    sp: Tokenizer,
+    sp: spm.SentencePieceProcessor,
     decoding_graph: Optional[k2.Fsa] = None,
 ) -> Dict[str, List[Tuple[List[str], List[str]]]]:
     """Decode dataset.
@@ -655,27 +627,15 @@ def decode_dataset(
         finished_streams = decode_one_chunk(
             params=params, model=model, decode_streams=decode_streams
         )
-
-        if not finished_streams:
-            print("No finished streams, breaking the loop")
-            break
-
         for i in sorted(finished_streams, reverse=True):
-            try:
-                decode_results.append(
-                    (
-                        decode_streams[i].id,
-                        decode_streams[i].ground_truth.split(),
-                        sp.decode(decode_streams[i].decoding_result()).split(),
-                    )
+            decode_results.append(
+                (
+                    decode_streams[i].id,
+                    decode_streams[i].ground_truth.split(),
+                    sp.decode(decode_streams[i].decoding_result()).split(),
                 )
-                del decode_streams[i]
-            except IndexError as e:
-                print(f"IndexError: {e}")
-                print(f"decode_streams length: {len(decode_streams)}")
-                print(f"finished_streams: {finished_streams}")
-                print(f"i: {i}")
-                continue
+            )
+            del decode_streams[i]
 
     if params.decoding_method == "greedy_search":
         key = "greedy_search"
@@ -741,7 +701,6 @@ def save_results(
 def main():
     parser = get_parser()
     MultiDatasetAsrDataModule.add_arguments(parser)
-    Tokenizer.add_arguments(parser)
     args = parser.parse_args()
     args.exp_dir = Path(args.exp_dir)
 
@@ -781,11 +740,8 @@ def main():
 
     logging.info(f"Device: {device}")
 
-    if not params.bilingual:
-        sp = Tokenizer.load(params.lang, params.lang_type)
-    else:
-        sp = spm.SentencePieceProcessor()
-        sp.load(params.bpe_model)
+    sp = spm.SentencePieceProcessor()
+    sp.load(params.bpe_model)
 
     # <blk> and <unk> is defined in local/train_bpe_model.py
     params.blank_id = sp.piece_to_id("<blk>")
@@ -889,21 +845,6 @@ def main():
     args.return_cuts = True
     multidataset_datamodule = MultiDatasetAsrDataModule(args)
 
-    if params.bilingual:
-        multi_dataset = MultiDataset(args)
-
-        def remove_short_utt(c: Cut):
-            T = ((c.num_frames - 7) // 2 + 1) // 2
-            if T <= 0:
-                logging.warning(
-                    f"Excluding cut with ID: {c.id} from decoding, num_frames: {c.num_frames}"
-                )
-            return T > 0
-
-        test_sets_cuts = multi_dataset.test_cuts()
-        test_sets = test_sets_cuts.keys()
-        test_cuts = [test_sets_cuts[k] for k in test_sets]
-
     valid_cuts = multidataset_datamodule.valid_cuts()
     test_cuts = multidataset_datamodule.test_cuts()
 
@@ -912,8 +853,6 @@ def main():
 
     for test_set, test_cut in zip(test_sets, test_cuts):
         logging.info(f"Decoding {test_set}")
-        if params.bilingual:
-            test_cut = test_cut.filter(remove_short_utt)
         results_dict = decode_dataset(
             cuts=test_cut,
             params=params,
