@@ -359,7 +359,7 @@ class ReazonSpeechAsrDataModule:
         )
 
     @lru_cache()
-    def test_cuts(self) -> List[CutSet]:
+    def test_cuts(self) -> CutSet:
         logging.info("About to get test cuts")
         return load_manifest_lazy(
             self.args.manifest_dir / "reazonspeech_cuts_test.jsonl.gz"

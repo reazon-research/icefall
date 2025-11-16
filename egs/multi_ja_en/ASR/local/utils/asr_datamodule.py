@@ -374,3 +374,31 @@ class MultiDatasetAsrDataModule:
             num_workers=self.args.num_workers,
         )
         return test_dl
+
+    @lru_cache()
+    def reazonspeech_dev_cuts(self) -> CutSet:
+        logging.info("About to get ReazonSpeech dev cuts")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "reazonspeech/reazonspeech_cuts_dev.jsonl.gz"
+        )
+
+    @lru_cache()
+    def reazonspeech_test_cuts(self) -> CutSet:
+        logging.info("About to get ReazonSpeech test cuts")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "reazonspeech/reazonspeech_cuts_test.jsonl.gz"
+        )
+
+    @lru_cache()
+    def mls_english_dev_cuts(self) -> CutSet:
+        logging.info("About to get MLS English dev cuts")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "mls_english/mls_eng_cuts_dev.jsonl.gz"
+        )
+
+    @lru_cache()
+    def mls_english_test_cuts(self) -> CutSet:
+        logging.info("About to get MLS English test cuts")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "mls_english/mls_eng_cuts_test.jsonl.gz"
+        )

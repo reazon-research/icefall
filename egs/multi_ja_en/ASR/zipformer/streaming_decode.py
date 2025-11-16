@@ -845,11 +845,11 @@ def main():
     args.return_cuts = True
     multidataset_datamodule = MultiDatasetAsrDataModule(args)
 
-    valid_cuts = multidataset_datamodule.valid_cuts()
-    test_cuts = multidataset_datamodule.test_cuts()
+    reazonspeech_test = multidataset_datamodule.reazonspeech_test_cuts()
+    mls_english_test = multidataset_datamodule.mls_english_test_cuts()
 
-    test_sets = ["valid", "test"]
-    test_cuts = [valid_cuts, test_cuts]
+    test_sets = ["reazonspeech_test", "mls_english_test"]
+    test_cuts = [reazonspeech_test, mls_english_test]
 
     for test_set, test_cut in zip(test_sets, test_cuts):
         logging.info(f"Decoding {test_set}")
