@@ -615,8 +615,8 @@ def decode_dataset(
                 decode_results.append(
                     (
                         decode_streams[i].id,
-                        tokenize_by_ja_char(decode_streams[i].ground_truth.lower()).split(),
-                        smart_byte_decode(sp.decode(decode_streams[i].decoding_result())).lower().split(),
+                        tokenize_by_ja_char(decode_streams[i].ground_truth).split(),
+                        tokenize_by_ja_char(smart_byte_decode(sp.decode(decode_streams[i].decoding_result()))).split(),
                     )
                 )
                 del decode_streams[i]
@@ -633,8 +633,8 @@ def decode_dataset(
             decode_results.append(
                 (
                     decode_streams[i].id,
-                    tokenize_by_ja_char(decode_streams[i].ground_truth.lower()).split(),
-                    smart_byte_decode(sp.decode(decode_streams[i].decoding_result())).lower().split(),
+                    tokenize_by_ja_char(decode_streams[i].ground_truth).split(),
+                    tokenize_by_ja_char(smart_byte_decode(sp.decode(decode_streams[i].decoding_result()))).split(),
                 )
             )
             del decode_streams[i]
