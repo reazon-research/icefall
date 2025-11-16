@@ -71,6 +71,7 @@ from icefall.utils import (
     setup_logger,
     store_transcripts,
     str2bool,
+    tokenize_by_ja_char,
     write_error_stats,
 )
 
@@ -614,7 +615,7 @@ def decode_dataset(
                 decode_results.append(
                     (
                         decode_streams[i].id,
-                        decode_streams[i].ground_truth.lower().split(),
+                        tokenize_by_ja_char(decode_streams[i].ground_truth.lower()).split(),
                         smart_byte_decode(sp.decode(decode_streams[i].decoding_result())).lower().split(),
                     )
                 )
@@ -632,7 +633,7 @@ def decode_dataset(
             decode_results.append(
                 (
                     decode_streams[i].id,
-                    decode_streams[i].ground_truth.lower().split(),
+                    tokenize_by_ja_char(decode_streams[i].ground_truth.lower()).split(),
                     smart_byte_decode(sp.decode(decode_streams[i].decoding_result())).lower().split(),
                 )
             )
