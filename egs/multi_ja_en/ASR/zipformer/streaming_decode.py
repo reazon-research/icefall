@@ -58,6 +58,7 @@ from torch import Tensor, nn
 from torch.nn.utils.rnn import pad_sequence
 from train import add_model_arguments, get_model, get_params
 
+from icefall import smart_byte_decode
 from icefall.checkpoint import (
     average_checkpoints,
     average_checkpoints_with_averaged_model,
@@ -614,7 +615,7 @@ def decode_dataset(
                     (
                         decode_streams[i].id,
                         decode_streams[i].ground_truth.split(),
-                        sp.decode(decode_streams[i].decoding_result()).split(),
+                        smart_byte_decode(sp.decode(decode_streams[i].decoding_result())).split(),
                     )
                 )
                 del decode_streams[i]
@@ -632,7 +633,7 @@ def decode_dataset(
                 (
                     decode_streams[i].id,
                     decode_streams[i].ground_truth.split(),
-                    sp.decode(decode_streams[i].decoding_result()).split(),
+                    smart_byte_decode(sp.decode(decode_streams[i].decoding_result())).split(),
                 )
             )
             del decode_streams[i]
