@@ -38,6 +38,7 @@ import math
 import os
 import pdb
 import subprocess as sp
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -853,6 +854,9 @@ def main():
     test_sets = ["reazonspeech_test", "mls_english_test"]
     test_cuts = [reazonspeech_test, mls_english_test]
 
+    # Dictionary to accumulate results from all test sets for combined WER
+    combined_results_dict = defaultdict(list)
+
     for test_set, test_cut in zip(test_sets, test_cuts):
         logging.info(f"Decoding {test_set}")
         results_dict = decode_dataset(
@@ -868,6 +872,17 @@ def main():
             test_set_name=test_set,
             results_dict=results_dict,
         )
+
+        # Accumulate results for combined WER calculation
+        for key, results in results_dict.items():
+            combined_results_dict[key].extend(results)
+
+    # Calculate and save combined WER across all test sets
+    save_results(
+        params=params,
+        test_set_name="combined_test_sets",
+        results_dict=combined_results_dict,
+    )
 
     logging.info("Done!")
 

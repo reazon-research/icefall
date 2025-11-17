@@ -766,23 +766,42 @@ def main():
         c.supervisions[0].text = text
         return c
 
-    test_cuts = multi_dataset.test_cuts()
-    test_cuts = test_cuts.filter(remove_short_utt)
-    # test_cuts = test_cuts.map(tokenize_and_encode_text)
+    # Load individual test sets
+    reazonspeech_test = multidataset_datamodule.reazonspeech_test_cuts()
+    mls_english_test = multidataset_datamodule.mls_english_test_cuts()
 
-    test_dl = multidataset_datamodule.test_dataloaders(test_cuts)
+    test_sets = ["reazonspeech_test", "mls_english_test"]
+    test_cuts_list = [reazonspeech_test, mls_english_test]
 
-    # test_sets = test_sets_cuts.keys()
-    # test_dl = [
-    #     data_module.test_dataloaders(test_sets_cuts[cuts_name].filter(remove_short_utt))
-    #     for cuts_name in test_sets
-    # ]
+    # Evaluate on each test set separately
+    for test_set, test_cuts in zip(test_sets, test_cuts_list):
+        logging.info(f"Start decoding {test_set}")
+        test_cuts = test_cuts.filter(remove_short_utt)
+        test_dl = multidataset_datamodule.test_dataloaders(test_cuts)
 
-    # for test_set, test_dl in zip(test_sets, test_dl):
-    logging.info("Start decoding test set")  #: {test_set}")
+        results_dict = decode_dataset(
+            dl=test_dl,
+            params=params,
+            model=model,
+            sp=sp,
+            word_table=word_table,
+            decoding_graph=decoding_graph,
+        )
 
-    results_dict = decode_dataset(
-        dl=test_dl,
+        save_results(
+            params=params,
+            test_set_name=test_set,
+            results_dict=results_dict,
+        )
+
+    # Also evaluate on combined test set for overall comparison
+    logging.info("Start decoding combined test set")
+    test_cuts_combined = multi_dataset.test_cuts()
+    test_cuts_combined = test_cuts_combined.filter(remove_short_utt)
+    test_dl_combined = multidataset_datamodule.test_dataloaders(test_cuts_combined)
+
+    results_dict_combined = decode_dataset(
+        dl=test_dl_combined,
         params=params,
         model=model,
         sp=sp,
@@ -792,8 +811,8 @@ def main():
 
     save_results(
         params=params,
-        test_set_name="test_set",
-        results_dict=results_dict,
+        test_set_name="combined_test_sets",
+        results_dict=results_dict_combined,
     )
 
     logging.info("Done!")

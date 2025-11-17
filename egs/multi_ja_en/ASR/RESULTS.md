@@ -11,7 +11,7 @@ The training command is:
 ```shell
 ./zipformer/train.py \
   --world-size 8 \
-  --causal 1 \
+  --causal 0 \
   --num-epochs 10 \
   --start-epoch 1 \
   --use-fp16 1 \
@@ -27,6 +27,7 @@ The decoding command is:
     --epoch 10 \
     --avg 1 \
     --exp-dir ./zipformer/exp \
+    --bpe-model data/lang/bbpe_2000/bbpe.model \
     --decoding-method modified_beam_search \
     --manifest-dir data/manifests
 ```
@@ -42,13 +43,14 @@ To export the model with onnx:
   --exp-dir ./zipformer/exp
 ```
 
-WER and CER on test set listed below (calculated with `./zipformer/decode.py`):
+WER on test sets listed below (calculated with `./zipformer/decode.py`):
 
-|       Datasets       | ReazonSpeech + MLS English (combined test set) |
-|----------------------|------------------------------------------------|
-|   Zipformer WER (%)  |                      test                      |
-|     greedy_search    |                      6.33                      |
-| modified_beam_search |                      6.32                      |
+| Decoding Method      | Combined | ReazonSpeech (Japanese) | MLS English |
+|----------------------|----------|-------------------------|-------------|
+| greedy_search        | 7.10     | 6.05                    | 8.76        |
+| modified_beam_search | 6.32     | TBD                     | TBD         |
+
+Note: Japanese text is tokenized character-level via `tokenize_by_ja_char`, so WER is effectively character error rate (CER).
 
 
 
@@ -96,7 +98,7 @@ The decoding command is:
 
 ```shell
 ./zipformer/streaming_decode.py \
-  --epoch 10 \
+  --epoch 23 \
   --avg 1 \
   --causal 1 \
   --chunk-size 16 \
@@ -104,7 +106,8 @@ The decoding command is:
   --exp-dir ./zipformer/exp-15k15k-streaming \
   --bpe-model data/lang/bbpe_2000/bbpe.model \
   --decoding-method greedy_search \
-  --num-decode-streams 2000
+  --num-decode-streams 2000 \
+  --manifest-dir data/manifests
 ```
 
 To export the model with sherpa onnx:
@@ -153,9 +156,13 @@ To export the model as Torchscript (`.jit`):
 
 You may also use decode chunk sizes `16`, `32`, `64`, `128`.
 
-Word Error Rates (WERs) listed below:
+WER on test sets listed below (calculated with `./zipformer/streaming_decode.py` with chunk-size 16, left-context-frames 128):
 
-*TODO: Run streaming_decode.py on test sets to get results*
+| Decoding Method | Combined | ReazonSpeech (Japanese) | MLS English |
+|-----------------|----------|-------------------------|-------------|
+| greedy_search   | 9.77     | 8.66                    | 11.52       |
+
+Note: Japanese text is tokenized character-level via `tokenize_by_ja_char`, so WER is effectively character error rate (CER).
 
 
 We also include WER% for common English ASR datasets:
